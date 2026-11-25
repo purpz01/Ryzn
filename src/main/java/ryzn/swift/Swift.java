@@ -8,11 +8,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Constants + shared executor for the pathfinder. The Hypixel/Wynncraft integrations and the custom
- * PacketEvent abstraction are intentionally dropped - ryzn wires the chunk feeder directly to
- * Fabric's {@code ClientChunkEvents}.
- */
+/** Chunk-cache budgets and the separate workers for cache I/O and native path searches. */
 public final class Swift {
 
   public static final int CHUNKS_PER_TICK = 8;
@@ -23,7 +19,7 @@ public final class Swift {
 
   private static final int EXECUTOR_QUEUE_CAPACITY = 64;
 
-  public static final ExecutorService executor;
+  public static final ThreadPoolExecutor executor;
 
   /**
    * Cache disk loads and saves, one at a time and in order, kept off {@link #executor} so a path

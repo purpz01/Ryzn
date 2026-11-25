@@ -15,7 +15,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import ryzn.macro.client.core.RyznBootstrap;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.input.MacroKeys;
 
 @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
@@ -194,7 +194,7 @@ final class TreeChopMotion {
       return;
     }
     float bearing = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
-    float routeYaw = PathfindCommand.routeHeadingYaw();
+    float routeYaw = WalkingNavigation.routeHeadingYaw();
     float yaw =
         Float.isNaN(routeYaw)
             ? bearing
@@ -296,7 +296,7 @@ final class TreeChopMotion {
     // walking to instead of down the path.
     if (!controllingLook
         || !lookMotion.hasTarget()
-        || (PathfindCommand.isNavigationActive() && !routeGaze)) {
+        || (WalkingNavigation.isNavigationActive() && !routeGaze)) {
       lookMotion.pause();
       return;
     }

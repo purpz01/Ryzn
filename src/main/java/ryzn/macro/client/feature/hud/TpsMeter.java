@@ -4,19 +4,8 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundPingPacket;
 
 /**
- * Server tick rate, measured from Hypixel's per-tick ping heartbeat.
- *
- * <p>Hypixel sends one {@link ClientboundPingPacket} per server tick, so the arrival gaps between
- * them <i>are</i> the tick times: {@code (samples - 1) / window seconds} is the rate the server is
- * actually running at. Same signal SkyHanni's TPS counter uses, including the de-duplication on the
- * ping id. Read on the Netty thread through {@link
- * ryzn.macro.client.mixin.network.ClientConnectionMixin}, so the timestamp is the packet's real
- * arrival - handing it to the main thread first would quantise every sample to the client's own
- * 50ms tick boundary.
- *
- * <p>Deliberately not the time-sync packet: that arrives once per 20 ticks, which is too coarse to
- * see a stutter. Nor vanilla's {@code TickRateManager}, which reports the rate {@code /tick rate}
- * declared and stays 20 however far behind the server falls.
+ * Estimates Hypixel server tick rate from distinct ping packets. Samples are timestamped on the
+ * network thread to preserve arrival timing between client ticks.
  */
 public final class TpsMeter {
 

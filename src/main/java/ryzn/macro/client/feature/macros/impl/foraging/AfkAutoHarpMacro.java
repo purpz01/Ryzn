@@ -41,8 +41,8 @@ import ryzn.macro.client.core.events.api.AutoHarpActionEvent;
 import ryzn.macro.client.core.events.api.GameMessageEvent;
 import ryzn.macro.client.core.events.api.Subscribe;
 import ryzn.macro.client.debug.MacroStateTrace;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.api.Macro;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.input.GuiActionTiming;
 import ryzn.macro.client.input.MacroKeys;
 import ryzn.macro.client.util.text.RyznChat;
@@ -413,7 +413,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
    *     Does nothing while navigation owns the look or no aim target is set.
    */
   public void tickLook() {
-    if (!shouldLockMouse() || lookTarget == null || PathfindCommand.isNavigationActive()) {
+    if (!shouldLockMouse() || lookTarget == null || WalkingNavigation.isNavigationActive()) {
       return;
     }
     final LocalPlayer player = Minecraft.getInstance().player;
@@ -436,7 +436,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
    * @return true in the aim and open states, and during the last-block nudge onto the harp spot
    */
   public boolean shouldLockMouse() {
-    if (!isEnabled() || PathfindCommand.isNavigationActive()) {
+    if (!isEnabled() || WalkingNavigation.isNavigationActive()) {
       return false;
     }
     return switch (state) {
@@ -475,7 +475,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
     clearLook();
 
     if (mc.gui.screen() != null) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       status = "Paused while a screen is open";
       return;
     }
@@ -487,19 +487,19 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
       final Entity npc = worldTargets.findMelody(level);
       if (npc != null && MacroObstruction.isWithinInteract(player, npc)) {
         worldTargets.rememberMelody(npc);
-        PathfindCommand.stopNavQuiet();
+        WalkingNavigation.stopNavQuiet();
         setState(State.FIND_MELODY);
         return;
       }
     }
     if (worldTargets.isAtMelody(player)) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       setState(State.FIND_MELODY);
       return;
     }
     if (!routeAttempts.isPathRequested()) {
       BlockPos melodyPosition = worldTargets.melodyPosition();
-      if (!PathfindCommand.startToQuiet(
+      if (!WalkingNavigation.startToQuiet(
           melodyPosition.getX(), melodyPosition.getY(), melodyPosition.getZ())) {
         fail("Could not start path to Melody");
         return;
@@ -508,7 +508,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
       status = "Pathing to Melody";
       return;
     }
-    if (!PathfindCommand.isNavigationActive() && stateTicks > 20) {
+    if (!WalkingNavigation.isNavigationActive() && stateTicks > 20) {
       setState(State.FIND_MELODY);
       return;
     }
@@ -554,7 +554,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
       setState(State.PATHING_TO_MELODY);
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     setState(State.ROTATE_TO_MELODY);
   }
 
@@ -627,7 +627,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
       }
       return;
     }
-    if (PathfindCommand.isNavigationActive()) {
+    if (WalkingNavigation.isNavigationActive()) {
       status = "Relocating for a clear view of Melody";
       return;
     }
@@ -648,7 +648,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
             MacroObstruction.findSidestep(
                 level, player, npc.blockPosition(), entityLookPoint(npc), npc);
         if (side != null) {
-          PathfindCommand.startToQuiet(side.getX(), side.getY(), side.getZ());
+          WalkingNavigation.startToQuiet(side.getX(), side.getY(), side.getZ());
         }
       }
       status = "Player blocking Melody";
@@ -751,7 +751,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
       return;
     }
     if (mc.gui.screen() != null) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       closeCurrentScreen(mc);
       return;
     }
@@ -765,7 +765,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
     }
     final BlockPos target = currentStand;
     if (target == null) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       status = "Waiting for a free harp spot";
       if (stateTicks > PATH_TIMEOUT_TICKS) {
         fail("No free harp spot");
@@ -775,20 +775,20 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
     // Someone is on our target tile - blacklist it and pick another next tick.
     if (stand.isPlayerOnBlock(level, player, target)) {
       stand.blacklist(target, now);
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       routeAttempts.enterState();
       currentStand = null;
       return;
     }
     // The server only accepts the harp click from the tile itself, so "in reach" is not arrival.
     if (isAtStand(player, target)) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       setState(State.ROTATE_TO_HARP);
       return;
     }
     // Route ended a step short: within 1.5 blocks, walk the last bit by hand rather than
     // re-pathing.
-    if (!PathfindCommand.isNavigationActive() && isNearStand(player, target)) {
+    if (!WalkingNavigation.isNavigationActive() && isNearStand(player, target)) {
       if (stateTicks > PATH_TIMEOUT_TICKS) {
         fail("Path to harp spot timed out");
         return;
@@ -811,7 +811,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
     }
     stepOntoTicks = 0;
     if (!routeAttempts.isPathRequested()) {
-      if (!PathfindCommand.startToQuiet(target.getX(), target.getY(), target.getZ())) {
+      if (!WalkingNavigation.startToQuiet(target.getX(), target.getY(), target.getZ())) {
         stand.blacklist(target, now); // unreachable - stop picking it
         currentStand = null;
         return;
@@ -820,7 +820,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
       status = "Walking to harp spot " + target.getX() + " " + target.getY() + " " + target.getZ();
       return;
     }
-    if (!PathfindCommand.isNavigationActive() && stateTicks > 20) {
+    if (!WalkingNavigation.isNavigationActive() && stateTicks > 20) {
       routeAttempts.enterState(); // path ended without arriving - re-choose + re-path next tick
     }
     if (stateTicks > PATH_TIMEOUT_TICKS) {
@@ -950,7 +950,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
     // the slab.
     final boolean stabilised =
         isAtStand(player, currentStand)
-            && !PathfindCommand.isNavigationActive()
+            && !WalkingNavigation.isNavigationActive()
             && lookTarget != null
             && aimedAt(player, lookTarget);
     final boolean rightClick = stabilised && worldTargets.isLookingAtHarp(mc);
@@ -1250,7 +1250,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
     if (opts == null) {
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     releaseMovementAndAttack(opts);
   }
 
@@ -1378,7 +1378,7 @@ public final class AfkAutoHarpMacro extends Macro implements ConfigSection {
   private void stopAll(String finalStatus, boolean completed) {
     final Minecraft mc = Minecraft.getInstance();
     releaseAllKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     if (mc.gui.screen() != null && isMacroScreen(mc)) {
       closeCurrentScreen(mc);
     }

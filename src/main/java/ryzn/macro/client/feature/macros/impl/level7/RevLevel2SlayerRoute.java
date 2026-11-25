@@ -12,8 +12,8 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import ryzn.macro.client.MacroInput;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.impl.level7.RevLevel2Macro.State;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.input.GuiActionTiming;
 import ryzn.macro.client.util.gui.MacroScreens;
 import ryzn.macro.client.util.inventory.MacroSlots;
@@ -50,11 +50,11 @@ final class RevLevel2SlayerRoute {
   void tickPathToMaddox(Minecraft mc, LocalPlayer player, State next) {
     hunt.look().clear();
     if (RevLevel2Macro.isWithinMaddoxArrival(player.getX(), player.getY(), player.getZ())) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       hunt.setState(next, "At Maddox");
       return;
     }
-    if (PathfindCommand.isNavigationActive()) {
+    if (WalkingNavigation.isNavigationActive()) {
       hunt.status = "Walking to -83 67 -132";
       return;
     }
@@ -67,7 +67,7 @@ final class RevLevel2SlayerRoute {
       return;
     }
     hunt.pathRetryTicks = PATH_RETRY_TICKS;
-    if (PathfindCommand.startToQuiet(
+    if (WalkingNavigation.startToQuiet(
         MADDOX_POSITION.getX(), MADDOX_POSITION.getY(), MADDOX_POSITION.getZ())) {
       hunt.status = "Pathfinding to Maddox";
     } else {
@@ -79,7 +79,7 @@ final class RevLevel2SlayerRoute {
     hunt.look().clear();
     if (RevLevel2Macro.isWithinMaddoxArrival(player.getX(), player.getY(), player.getZ())) {
       hunt.combat.stop();
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       hunt.setState(next, "At Maddox");
       return;
     }

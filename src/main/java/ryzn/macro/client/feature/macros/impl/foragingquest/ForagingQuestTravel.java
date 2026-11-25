@@ -15,9 +15,9 @@ import net.minecraft.world.phys.Vec3;
 import ryzn.macro.client.core.RyznBootstrap;
 import ryzn.macro.client.core.events.api.TreeChopActionEvent;
 import ryzn.macro.client.feature.commands.impl.MacroCommands;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.hud.SkyBlockHud;
 import ryzn.macro.client.feature.macros.impl.foragingquest.ForagingRoute.Target;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.rotation.impl.RouteGaze;
 import ryzn.macro.client.input.MacroKeys;
 import ryzn.macro.client.world.WorldChangeDetector;
@@ -120,7 +120,7 @@ final class ForagingQuestTravel {
     if (!target.equals(quest.pathTarget)) {
       contactedTransfer = null;
       if (quest.pathTarget != null) {
-        PathfindCommand.stopNavQuiet();
+        WalkingNavigation.stopNavQuiet();
         quest.actionTiming.clearPathRequest();
         quest.stateTicks = 0;
       }
@@ -138,7 +138,7 @@ final class ForagingQuestTravel {
       return;
     }
     if (next != null && hasArrived(player, target)) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       quest.setState(next);
       return;
     }
@@ -147,7 +147,7 @@ final class ForagingQuestTravel {
       return;
     }
     if (target.equals(contactedTransfer) && !player.onGround()) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       quest.actionTiming.clearPathRequest();
       quest.look().clear();
       quest.status = "Waiting to land after " + target.label();
@@ -157,7 +157,7 @@ final class ForagingQuestTravel {
       return;
     }
     if (!quest.actionTiming.isPathRequested()) {
-      if (!PathfindCommand.startToQuiet(target.x(), target.y(), target.z())) {
+      if (!WalkingNavigation.startToQuiet(target.x(), target.y(), target.z())) {
         quest.fail("Could not start path to " + target.label());
         return;
       }
@@ -165,7 +165,7 @@ final class ForagingQuestTravel {
       quest.status = "Walking to " + target.label();
       return;
     }
-    if (!PathfindCommand.isNavigationActive() && quest.stateTicks > 20) {
+    if (!WalkingNavigation.isNavigationActive() && quest.stateTicks > 20) {
       // Navigation ended without arriving (hasArrived already ruled that out above), so this is a
       // no-path answer - re-arm rather than start the next step from across the island. The timeout
       // still bounds the whole state.
@@ -188,7 +188,7 @@ final class ForagingQuestTravel {
         || Math.abs(player.getY() - target.y()) > 0.6) {
       return false;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     quest.actionTiming.clearPathRequest();
     contactedTransfer = target;
     if (dx * dx + dz * dz > 0.15 * 0.15) {
@@ -281,7 +281,7 @@ final class ForagingQuestTravel {
       return true;
     }
     return quest.stateTicks > 20
-        && !PathfindCommand.isNavigationActive()
+        && !WalkingNavigation.isNavigationActive()
         && isNearTarget(player, target);
   }
 
@@ -294,7 +294,7 @@ final class ForagingQuestTravel {
     while (quest.walkBackLeg < quest.walkBackLegs
         && hasArrived(player, transferChain[quest.walkBackLeg])) {
       quest.walkBackLeg++;
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       quest.stateTicks = 0;
       quest.actionTiming.enterState();
     }
@@ -321,7 +321,7 @@ final class ForagingQuestTravel {
    */
   void tickPathToJungleIsland(Minecraft mc, LocalPlayer player, ForagingQuestState next) {
     if (ForagingRoute.isOnJungleIsland(player)) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       quest.setState(next);
       return;
     }
@@ -424,7 +424,7 @@ final class ForagingQuestTravel {
         && hasArrived(player, ForagingRoute.RYAN_EAST_SOUTH_APPROACH)) {
       quest.ryanWaypointReached = true;
       quest.ryanApproachTarget = null;
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       quest.actionTiming.clearPathRequest();
     }
     final Target target =
@@ -433,7 +433,7 @@ final class ForagingQuestTravel {
             : ForagingRoute.RYAN.target();
     if (!target.equals(quest.ryanApproachTarget)) {
       quest.ryanApproachTarget = target;
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       quest.actionTiming.clearPathRequest();
     }
     tickPathing(mc, player, target, ForagingQuestState.INTERACT_RYAN_START);
@@ -522,7 +522,7 @@ final class ForagingQuestTravel {
         .post(new TreeChopActionEvent(TreeChopActionEvent.Action.RESET_LOST_TREES));
     quest.stateTicks++;
     releaseAllKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     closeCurrentScreen(mc);
     MacroCommands.sendCommand(mc, "is");
     quest.setState(ForagingQuestState.LOBBY_HOP_WAIT_IS);
@@ -531,7 +531,7 @@ final class ForagingQuestTravel {
   void tickLobbyHopWaitIs(Minecraft mc) {
     quest.stateTicks++;
     releaseAllKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     closeCurrentScreen(mc);
     if (quest.stateTicks >= LOBBY_HOP_ISLAND_WAIT_TICKS) {
       quest.setState(ForagingQuestState.LOBBY_HOP_SEND_HUB);
@@ -541,7 +541,7 @@ final class ForagingQuestTravel {
   void tickLobbyHopSendHub(Minecraft mc) {
     quest.stateTicks++;
     releaseAllKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     closeCurrentScreen(mc);
     MacroCommands.sendCommand(mc, "hub");
     quest.hubHopSettleTicks = 0;
@@ -551,7 +551,7 @@ final class ForagingQuestTravel {
   void tickLobbyHopSettle(Minecraft mc) {
     quest.stateTicks++;
     releaseAllKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     closeCurrentScreen(mc);
     final String area = WorldChangeDetector.currentArea();
     if (area == null || !normalizeSearchText(area).contains(HUB_AREA_NEEDLE)) {

@@ -17,8 +17,8 @@ import net.minecraft.world.entity.LivingEntity;
 import ryzn.macro.client.MacroInput;
 import ryzn.macro.client.config.RyznSettings;
 import ryzn.macro.client.debug.DebugLog;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.modules.impl.combat.CombatModule.ManagedAttackMode;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.pathfinder.path.PathExecutor;
 import ryzn.macro.client.feature.pathfinder.path.PathGazeHint;
 import ryzn.macro.client.input.MacroKeys;
@@ -285,12 +285,12 @@ final class CombatPursuitController {
           targetVisible,
           FLOW_CHASE_RANGE,
           combat.telemetry);
-      combat.pathFailures.consumeIfChanged(PathfindCommand.getNavFailSeq());
+      combat.pathFailures.consumeIfChanged(WalkingNavigation.getNavFailSeq());
     } else {
       if (!combat.usesRecordedMovement()
           && transmissionFirst(dist)
           && targetVisible
-          && !PathfindCommand.isNavigationActive()) {
+          && !WalkingNavigation.isNavigationActive()) {
         // The next hop route is still planning: keep the body flowing at the mob rather than
         // parking it for those ticks. The executor takes over the instant the route is live.
         combat.body.chase(
@@ -349,7 +349,7 @@ final class CombatPursuitController {
         combat.nav.isOwned(),
         combat.state.tracking,
         combat.progressWatchdog.noProgressTicks(),
-        PathfindCommand.isNavigationActive());
+        WalkingNavigation.isNavigationActive());
   }
 
   /**
@@ -371,7 +371,7 @@ final class CombatPursuitController {
   }
 
   private boolean canHandoffBridge(LocalPlayer player, double distance) {
-    if (combat.state.handoffBridgeTicks <= 0 || PathfindCommand.isNavigationActive()) {
+    if (combat.state.handoffBridgeTicks <= 0 || WalkingNavigation.isNavigationActive()) {
       return false;
     }
     if (distance > FLOW_CHASE_RANGE) {
@@ -434,7 +434,7 @@ final class CombatPursuitController {
           || height > DIRECT_CLIMB_MAX
           || height < -RecordedCombatMovement.DIRECT_DROP_MAX
           || !visible
-          || !player.onGround() && PathfindCommand.isNavigationActive()
+          || !player.onGround() && WalkingNavigation.isNavigationActive()
           || player.onGround()
               && !(hittable && dist <= RecordedCombatMovement.STOP_RANGE)
               && !PathExecutor.instance.canWalkDirectlyTo(
@@ -450,7 +450,7 @@ final class CombatPursuitController {
         combat.state.target.getY() - player.getY(),
         yawAbs,
         visible,
-        PathfindCommand.isNavigationActive(),
+        WalkingNavigation.isNavigationActive(),
         recovering);
   }
 
@@ -657,7 +657,7 @@ final class CombatPursuitController {
   }
 
   private void detectSearchPathFailure() {
-    final int seq = PathfindCommand.getNavFailSeq();
+    final int seq = WalkingNavigation.getNavFailSeq();
     if (combat.pathFailures.consumeIfChanged(seq)) {
       if (managedUsesPatrol(combat.managedSettings)) {
         advanceManagedPatrol();

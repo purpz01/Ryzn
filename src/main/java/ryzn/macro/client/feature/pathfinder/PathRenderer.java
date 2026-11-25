@@ -95,33 +95,24 @@ public final class PathRenderer {
 
   private static volatile List<Waypoint> path = List.of();
 
-  /**
-   * Render-only route node. {@code key} marks an engine turn point (drawn as a glassy box);
-   * gap-fillers inserted for steering are {@code key=false}. {@code action} is retained from the
-   * planner (unused here).
-   */
-  public record Waypoint(
-      int x,
-      int y,
-      int z,
-      double centerX,
-      double centerY,
-      double centerZ,
-      int action,
-      boolean key) {
-    Waypoint(int x, int y, int z, double centerX, double centerZ, int action, boolean key) {
-      this(x, y, z, centerX, y, centerZ, action, key);
-    }
-
-    Waypoint(int x, int y, int z, int action, boolean key) {
-      this(x, y, z, x + 0.5, y, z + 0.5, action, key);
-    }
-  }
+  /** Render-only route node. Key nodes are drawn, while steering gap-fillers are skipped. */
+  record Waypoint(
+      int x, int y, int z, double centerX, double centerY, double centerZ, boolean key) {}
 
   private PathRenderer() {}
 
   public static void setPath(List<Waypoint> p) {
-    path = (p == null || p.isEmpty()) ? List.of() : List.copyOf(p);
+    if (p == null || p.isEmpty()) {
+      clear();
+      return;
+    }
+    final List<Waypoint> keyNodes = new ArrayList<>();
+    for (Waypoint waypoint : p) {
+      if (waypoint.key()) {
+        keyNodes.add(waypoint);
+      }
+    }
+    path = List.copyOf(cullCollinear(keyNodes));
   }
 
   public static void clear() {
@@ -155,20 +146,10 @@ public final class PathRenderer {
       return;
     }
 
-    // Drawn nodes = engine key nodes only (gap-fillers aren't drawn), with nodes that sit on a
-    // straight
-    // run between their neighbours culled so a long straight line shows just its two endpoints.
-    final List<Waypoint> keyNodes = new ArrayList<>();
-    for (final Waypoint w : p) {
-      if (w.key()) {
-        keyNodes.add(w);
-      }
-    }
-    final List<Waypoint> drawn = cullCollinear(keyNodes);
     if (boxes) {
-      drawBoxes(level, cam, pose, collector, drawn);
+      drawBoxes(level, cam, pose, collector, p);
     } else {
-      drawCurve(mc, level, cam, pose, collector, drawn);
+      drawCurve(mc, level, cam, pose, collector, p);
     }
   }
 
@@ -197,13 +178,7 @@ public final class PathRenderer {
       hues[i] = lerpColor(START_COLOR, END_COLOR, t);
     }
 
-    // Fit each node's box to the block it sits on (slab = half-height frame, path block = 15/16,
-    // stairs =
-    // the step shape) by reading the live VoxelShape - Java owns block-shape classification.
-    // Waypoint y
-    // already points at the floor block (getKeyNodesArray applies yOffset=-1 to the native feet-Y
-    // output),
-    // so this is the block the player stands on. Precomputed once and reused by both render passes.
+    // Fit each box to the live shape of the floor block and reuse it in both render passes.
     final List<List<AABB>> boxesPerNode = new ArrayList<>(n);
     for (final Waypoint w : drawn) {
       boxesPerNode.add(blockBoxes(level, w.x(), w.y(), w.z()));

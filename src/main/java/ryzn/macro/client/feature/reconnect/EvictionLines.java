@@ -3,16 +3,8 @@ package ryzn.macro.client.feature.reconnect;
 import ryzn.macro.client.util.text.MacroText;
 
 /**
- * The chat Hypixel sends when it moves you off SkyBlock without disconnecting you. Strings taken
- * from SkyHanni's kick pattern and aether's recovery triggers.
- *
- * <p>Split out of {@link MacroReconnect} for two reasons: it is the only part of the recovery with
- * no client state, so it can be tested, and a typo in one of these needles fails silently and costs
- * a whole unattended session - exactly the failure that made this class necessary.
- *
- * <p>A trigger preceded by a colon is ignored, because that is a player quoting it in chat rather
- * than the server saying it. Without that, anyone can stop a macro by typing "You were spawned in
- * Limbo.".
+ * Matches server notices that move the player outside SkyBlock while the connection remains open.
+ * Player chat that quotes a notice is ignored.
  */
 public final class EvictionLines {
 

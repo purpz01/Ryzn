@@ -1,8 +1,8 @@
 package ryzn.macro.client.feature.failsafe;
 
 import ryzn.macro.client.core.RyznBootstrap;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.impl.wheat.WheatBreakerMacro;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 
 final class FailsafeActivity {
   private FailsafeActivity() {}
@@ -16,6 +16,6 @@ final class FailsafeActivity {
   }
 
   private static boolean navigationActive() {
-    return PathfindCommand.isNavigationActive();
+    return WalkingNavigation.isNavigationActive();
   }
 }

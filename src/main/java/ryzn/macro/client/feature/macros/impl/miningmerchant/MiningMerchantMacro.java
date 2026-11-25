@@ -26,8 +26,8 @@ import ryzn.macro.client.core.RyznBootstrap;
 import ryzn.macro.client.core.events.api.MiningMerchantActionEvent;
 import ryzn.macro.client.core.events.api.Subscribe;
 import ryzn.macro.client.debug.MacroStateTrace;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.api.Macro;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.rotation.api.LookController;
 import ryzn.macro.client.feature.rotation.impl.RouteGaze;
 import ryzn.macro.client.input.ClickConfirm;
@@ -153,7 +153,7 @@ public final class MiningMerchantMacro extends Macro {
     if (gaze.isOwned()) {
       return true;
     } // watching the merchant mid-route; the executor keeps the body
-    if (PathfindCommand.isNavigationActive()) {
+    if (WalkingNavigation.isNavigationActive()) {
       return false;
     }
     return state == State.INTERACT_MERCHANT;
@@ -194,7 +194,7 @@ public final class MiningMerchantMacro extends Macro {
 
   /** Functional aim on the game tick (fps-independent; works minimized at ~1 fps). */
   public void tickLook() {
-    if (!shouldLockMouse() || (PathfindCommand.isNavigationActive() && !gaze.isOwned())) {
+    if (!shouldLockMouse() || (WalkingNavigation.isNavigationActive() && !gaze.isOwned())) {
       return;
     }
     final LocalPlayer player = Minecraft.getInstance().player;
@@ -221,17 +221,17 @@ public final class MiningMerchantMacro extends Macro {
     }
 
     if (mc.gui.screen() != null) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       status = "Paused while a screen is open";
       return;
     }
     if (isAtMerchantPosition(player)) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       setState(State.INTERACT_MERCHANT);
       return;
     }
     if (!actionTiming.isPathRequested()) {
-      if (!PathfindCommand.startToQuiet(
+      if (!WalkingNavigation.startToQuiet(
           MERCHANT_POSITION.getX(), MERCHANT_POSITION.getY(), MERCHANT_POSITION.getZ())) {
         fail("Could not start path to Mining Merchant");
         return;
@@ -240,7 +240,7 @@ public final class MiningMerchantMacro extends Macro {
       status = "Walking to Mining Merchant";
       return;
     }
-    if (!PathfindCommand.isNavigationActive() && stateTicks > NPC_APPROACH_GRACE_TICKS) {
+    if (!WalkingNavigation.isNavigationActive() && stateTicks > NPC_APPROACH_GRACE_TICKS) {
       setState(State.INTERACT_MERCHANT);
       return;
     }
@@ -348,7 +348,7 @@ public final class MiningMerchantMacro extends Macro {
     }
     releaseAllKeys(mc.options);
     status = "Sidestepping for a clear view of the Mining Merchant";
-    PathfindCommand.startToQuiet(side.getX(), side.getY(), side.getZ());
+    WalkingNavigation.startToQuiet(side.getX(), side.getY(), side.getZ());
   }
 
   /**
@@ -514,7 +514,7 @@ public final class MiningMerchantMacro extends Macro {
   private void stopAll(String reason, boolean completed) {
     final Minecraft mc = Minecraft.getInstance();
     releaseAllKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     if (mc.gui.screen() != null && menuSlots.isPurchaseScreen(mc, merchantGuiOpened)) {
       closeCurrentScreen(mc);
     }

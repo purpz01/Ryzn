@@ -39,8 +39,8 @@ import ryzn.macro.client.core.events.api.CarpentryUnlockActionEvent;
 import ryzn.macro.client.core.events.api.GameMessageEvent;
 import ryzn.macro.client.core.events.api.Subscribe;
 import ryzn.macro.client.debug.MacroStateTrace;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.api.Macro;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.rotation.impl.RouteGaze;
 import ryzn.macro.client.input.GuiActionTiming;
 import ryzn.macro.client.input.MacroKeys;
@@ -52,7 +52,7 @@ import ryzn.macro.client.util.text.RyznChat;
  * Ryzn-native Carpentry Unlock macro. Paths to the Wool Weaver, buys White Wool x64 (page 2 ->
  * right-click trade -> Shop Trading Options -> x64 cost 2048), paths to the Carpenter, equips the
  * wool, interacts, and waits for the carpentry unlock chat. Walking uses Ryzn's native pathfinder
- * ({@link PathfindCommand}); rotation, GUI handling, and slot logic mirror the Ryzn Bea / Gold
+ * ({@link WalkingNavigation}); rotation, GUI handling, and slot logic mirror the Ryzn Bea / Gold
  * Shovel macros (self-contained).
  */
 public final class CarpentryUnlockMacro extends Macro {
@@ -206,7 +206,7 @@ public final class CarpentryUnlockMacro extends Macro {
     if (gaze.isOwned()) {
       return true;
     } // watching the NPC mid-route; the executor keeps the body
-    if (PathfindCommand.isNavigationActive()) {
+    if (WalkingNavigation.isNavigationActive()) {
       return false;
     }
     return switch (state) {
@@ -283,7 +283,7 @@ public final class CarpentryUnlockMacro extends Macro {
   public void tickLook() {
     if (!shouldLockMouse()
         || lookTarget == null
-        || (PathfindCommand.isNavigationActive() && !gaze.isOwned())) {
+        || (WalkingNavigation.isNavigationActive() && !gaze.isOwned())) {
       return;
     }
     final LocalPlayer player = Minecraft.getInstance().player;
@@ -338,19 +338,19 @@ public final class CarpentryUnlockMacro extends Macro {
     }
 
     if (mc.gui.screen() != null) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       status = "Paused while a screen is open";
       return;
     }
 
     if (isAtExactTarget(player, x, y, z)) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       setState(next);
       return;
     }
 
     if (!pathRequested) {
-      if (!PathfindCommand.startToQuiet(x, y, z)) {
+      if (!WalkingNavigation.startToQuiet(x, y, z)) {
         fail("Could not start path to " + label);
         return;
       }
@@ -359,7 +359,7 @@ public final class CarpentryUnlockMacro extends Macro {
       return;
     }
 
-    if (!PathfindCommand.isNavigationActive() && stateTicks > NPC_APPROACH_GRACE_TICKS) {
+    if (!WalkingNavigation.isNavigationActive() && stateTicks > NPC_APPROACH_GRACE_TICKS) {
       setState(next);
       return;
     }
@@ -1031,7 +1031,7 @@ public final class CarpentryUnlockMacro extends Macro {
   private void stopAll(String reason, boolean completed) {
     final Minecraft mc = Minecraft.getInstance();
     releaseAllKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     if (mc.gui.screen() != null && shouldCloseMacroScreen(mc)) {
       closeCurrentScreen(mc);
     }

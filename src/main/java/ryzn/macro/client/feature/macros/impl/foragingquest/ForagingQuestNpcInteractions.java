@@ -21,9 +21,9 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import ryzn.macro.client.MacroInput;
 import ryzn.macro.client.feature.commands.impl.MacroCommands;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.impl.foragingquest.ForagingRoute.Npc;
 import ryzn.macro.client.feature.macros.impl.foragingquest.ForagingRoute.Target;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.input.GuiActionTiming;
 import ryzn.macro.client.input.MacroKeys;
 import ryzn.macro.client.util.world.MacroObstruction;
@@ -84,7 +84,7 @@ final class ForagingQuestNpcInteractions {
     if (relocating()) {
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     quest.actionTiming.clearPathRequest();
     if (!quest.look().aimAtEntity(player, entity)) {
       return;
@@ -161,7 +161,7 @@ final class ForagingQuestNpcInteractions {
     if (relocating()) {
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     quest.actionTiming.clearPathRequest();
     if (!quest.look().aimAtEntity(player, entity)) {
       return;
@@ -224,7 +224,7 @@ final class ForagingQuestNpcInteractions {
     if (relocating()) {
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     quest.actionTiming.clearPathRequest();
     if (!quest.look().aimAtEntity(player, entity)) {
       return;
@@ -284,7 +284,7 @@ final class ForagingQuestNpcInteractions {
     if (relocating()) {
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     quest.actionTiming.clearPathRequest();
     if (!quest.look().aimAtEntity(player, entity)) {
       return;
@@ -373,7 +373,7 @@ final class ForagingQuestNpcInteractions {
     if (relocating()) {
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     quest.actionTiming.clearPathRequest();
     if (!quest.look().aimAtEntity(player, entity)) {
       return;
@@ -437,7 +437,7 @@ final class ForagingQuestNpcInteractions {
     if (relocating()) {
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     quest.actionTiming.clearPathRequest();
     if (!quest.look().aimAtEntity(player, entity)) {
       return;
@@ -498,7 +498,7 @@ final class ForagingQuestNpcInteractions {
     if (relocating()) {
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     quest.actionTiming.clearPathRequest();
     if (!quest.look().aimAtEntity(player, entity)) {
       return;
@@ -551,7 +551,7 @@ final class ForagingQuestNpcInteractions {
     if (relocating()) {
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     quest.actionTiming.clearPathRequest();
     if (!quest.look().aimAtEntity(player, entity)) {
       return;
@@ -607,7 +607,7 @@ final class ForagingQuestNpcInteractions {
     if (relocating()) {
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     quest.actionTiming.clearPathRequest();
     if (!quest.look().aimAtEntity(player, entity)) {
       return;
@@ -636,7 +636,7 @@ final class ForagingQuestNpcInteractions {
     }
     final Entity molbert = quest.route.npc(level, ForagingRoute.FINAL_MOLBERT);
     if (molbert != null && isWithinInteractRange(player, molbert)) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       quest.setState(ForagingQuestState.INTERACT_FINAL_MOLBERT_HELP);
       return;
     }
@@ -652,7 +652,7 @@ final class ForagingQuestNpcInteractions {
       target = ForagingRoute.FINAL_MOLBERT.target();
     }
     if (!quest.actionTiming.isPathRequested()) {
-      if (!PathfindCommand.startToQuiet(target.x(), target.y(), target.z())) {
+      if (!WalkingNavigation.startToQuiet(target.x(), target.y(), target.z())) {
         quest.fail("Could not start path to final Molbert");
         return;
       }
@@ -660,7 +660,7 @@ final class ForagingQuestNpcInteractions {
       quest.status = "Walking to final Molbert";
       return;
     }
-    if (!PathfindCommand.isNavigationActive() && quest.stateTicks > 20) {
+    if (!WalkingNavigation.isNavigationActive() && quest.stateTicks > 20) {
       quest.actionTiming.clearPathRequest();
       if (quest.timedOut(PATH_TIMEOUT_TICKS)) {
         quest.fail("Final Molbert not found");
@@ -718,7 +718,7 @@ final class ForagingQuestNpcInteractions {
     if (!quest.sidestepActive) {
       return false;
     }
-    if (PathfindCommand.isNavigationActive()) {
+    if (WalkingNavigation.isNavigationActive()) {
       quest.status = "Relocating for a clear view";
       return true;
     }
@@ -749,7 +749,7 @@ final class ForagingQuestNpcInteractions {
     final BlockPos side =
         MacroObstruction.findSidestep(
             level, player, entity.blockPosition(), entityLookPoint(entity), entity);
-    if (side != null && PathfindCommand.startToQuiet(side.getX(), side.getY(), side.getZ())) {
+    if (side != null && WalkingNavigation.startToQuiet(side.getX(), side.getY(), side.getZ())) {
       quest.sidestepActive = true;
       quest.status = "Relocating for a clear view";
     }
@@ -758,7 +758,7 @@ final class ForagingQuestNpcInteractions {
 
   void pathToNpcInteractRange(Entity entity, Npc npc) {
     quest.look().clear();
-    if (PathfindCommand.isNavigationActive()) {
+    if (WalkingNavigation.isNavigationActive()) {
       quest.status = "Walking to " + npc.label();
       return;
     }
@@ -771,7 +771,7 @@ final class ForagingQuestNpcInteractions {
       return;
     }
     final Target target = interactTarget(entity, npc);
-    if (!PathfindCommand.startToQuiet(target.x(), target.y(), target.z())) {
+    if (!WalkingNavigation.startToQuiet(target.x(), target.y(), target.z())) {
       quest.fail("Could not start path to " + npc.label());
       return;
     }

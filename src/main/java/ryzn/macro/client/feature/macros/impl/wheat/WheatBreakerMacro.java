@@ -25,9 +25,9 @@ import ryzn.macro.client.core.events.api.Subscribe;
 import ryzn.macro.client.core.events.api.WheatBreakerActionEvent;
 import ryzn.macro.client.debug.MacroStateTrace;
 import ryzn.macro.client.feature.api.MenuToggle;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.api.Macro;
 import ryzn.macro.client.feature.macros.impl.level7.SkillLevelDetector;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.rotation.impl.RouteGaze;
 import ryzn.macro.client.util.text.RyznChat;
 import ryzn.macro.client.world.WorldChangeDetector;
@@ -501,7 +501,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
       status = phase.label();
     }
 
-    if (PathfindCommand.isNavigationActive()) {
+    if (WalkingNavigation.isNavigationActive()) {
       harvestController.releaseAttack(mc);
       harvestController.releaseWalkKeys(mc.options);
       harvestController.clearAim();
@@ -510,7 +510,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
           return;
         }
         if (isPlayerInZone(player)) {
-          PathfindCommand.stopNavQuiet();
+          WalkingNavigation.stopNavQuiet();
           beginHarvesting(level);
           return;
         }
@@ -520,13 +520,13 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
             && isPlayerAtZoneHeight(player)
             && shouldBeginPreZoneSweep(player, level)
             && harvestController.hasClearWalk(player, level, zoneRoute.currentCenter())) {
-          PathfindCommand.stopNavQuiet();
+          WalkingNavigation.stopNavQuiet();
           beginPreZoneHarvesting(level);
           return;
         }
       } else if (phase == WheatPhase.AUTO_BUY_PATHING || phase == WheatPhase.AUTO_SELL_PATHING) {
         if (WheatMerchantActions.isNearMerchant(player)) {
-          PathfindCommand.stopNavQuiet();
+          WalkingNavigation.stopNavQuiet();
           enterPhase(
               phase == WheatPhase.AUTO_BUY_PATHING
                   ? WheatPhase.AUTO_BUY_INTERACT
@@ -537,7 +537,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
         return;
       } else if (phase == WheatPhase.LOBBY_HOP_RETURN_TO_ZONE) {
         if (isPlayerInZone(player)) {
-          PathfindCommand.stopNavQuiet();
+          WalkingNavigation.stopNavQuiet();
           beginHarvesting(level);
           return;
         }
@@ -579,7 +579,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
 
   /** Functional aim on the game tick (fps-independent; works minimized at ~1 fps). */
   public void tickLook() {
-    if (!enabled.get() || !shouldLockMouse() || PathfindCommand.isNavigationActive()) {
+    if (!enabled.get() || !shouldLockMouse() || WalkingNavigation.isNavigationActive()) {
       return;
     }
     final LocalPlayer player = Minecraft.getInstance().player;
@@ -594,7 +594,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
   }
 
   public void onRenderFrame() {
-    if (!enabled.get() || !shouldLockMouse() || PathfindCommand.isNavigationActive()) {
+    if (!enabled.get() || !shouldLockMouse() || WalkingNavigation.isNavigationActive()) {
       return;
     }
     final LocalPlayer player = Minecraft.getInstance().player;
@@ -641,8 +641,8 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
     if (live == WheatZoneProbe.UNKNOWN || live > clusterRemainingThreshold.get()) {
       return false;
     }
-    if (PathfindCommand.isNavigationActive()) {
-      PathfindCommand.stopNavQuiet();
+    if (WalkingNavigation.isNavigationActive()) {
+      WalkingNavigation.stopNavQuiet();
     }
     zonesSkippedInPass++;
     trace.log("SKIP_ZONE", "zone " + zoneRoute.currentNumber() + " clusters=" + live);
@@ -676,7 +676,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
     phaseTicks = 0;
     status = next.label();
     if (next == WheatPhase.AUTO_BUY_INTERACT || next == WheatPhase.AUTO_SELL_INTERACT) {
-      harvestController.lookMotion().reset();
+      harvestController.lookMotion().clearTarget();
       merchantActions.enterInteraction();
     }
     if (next == WheatPhase.AUTO_BUY_PURCHASE || next == WheatPhase.AUTO_SELLING) {
@@ -833,7 +833,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
     phaseTicks = 0;
     status = nextPhase.label();
     pathAttempts.recordRequest(PATH_RETRY_COOLDOWN_TICKS);
-    PathfindCommand.startToQuiet(target.getX(), target.getY(), target.getZ());
+    WalkingNavigation.startToQuiet(target.getX(), target.getY(), target.getZ());
   }
 
   private void tickMerchantPathing(
@@ -844,14 +844,14 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
     // Watch the merchant on the way in rather than staring down the path and snapping round on
     // arrival.
     final Entity watch = merchantActions.merchant(mc.level);
-    if (gaze.shouldWatch(player, watch, harvestController.lookMotion()::reset)) {
+    if (gaze.shouldWatch(player, watch, harvestController.lookMotion()::clearTarget)) {
       harvestController.lookMotion().setTarget(entityLookPoint(watch));
     } else {
       harvestController.lookMotion().clearTarget();
     }
     status = WheatMerchantActions.isNearMerchant(player) ? nextStatus : "Pathing to Farm Merchant";
     if (WheatMerchantActions.isNearMerchant(player)) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       enterPhase(interactPhase);
       status = nextStatus;
       return;
@@ -875,13 +875,13 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
     harvestController.releaseWalkKeys(mc.options);
     // A sidestep walk owns the yaw while it runs - aiming at the merchant mid-walk would fight the
     // pathfinder's steering. The timeout still ends it, so a stuck relocate can't stall the phase.
-    if (PathfindCommand.isNavigationActive()
+    if (WalkingNavigation.isNavigationActive()
         && !WheatMerchantActions.isInteractTimedOut(phaseTicks)) {
       harvestController.lookMotion().clearTarget();
       status = "Moving for a clear view of the Farm Merchant";
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     status = label;
     switch (merchantActions.tickInteract(
         mc, player, level, harvestController.lookMotion(), phaseTicks)) {
@@ -897,7 +897,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
       case SIDESTEP -> {
         final BlockPos side = merchantActions.sidestepTarget();
         status = "Player blocking the Farm Merchant, moving aside";
-        PathfindCommand.startToQuiet(side.getX(), side.getY(), side.getZ());
+        WalkingNavigation.startToQuiet(side.getX(), side.getY(), side.getZ());
       }
       case OPEN_TIMEOUT -> fail("Farm Merchant did not open");
       case WAITING -> {}
@@ -909,7 +909,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
   private void handleAutoBuyPurchase(Minecraft mc, LocalPlayer player) {
     harvestController.releaseAttack(mc);
     harvestController.releaseWalkKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     status = "Buying Rookie Hoe";
     switch (merchantActions.tickPurchase(mc, player, phaseTicks)) {
       case RETRY_INTERACT -> enterPhase(WheatPhase.AUTO_BUY_INTERACT);
@@ -934,7 +934,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
   private void handleAutoSelling(Minecraft mc, LocalPlayer player) {
     harvestController.releaseAttack(mc);
     harvestController.releaseWalkKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     status = "Selling wheat/seeds";
     switch (merchantActions.tickSelling(mc, player, phaseTicks)) {
       case REOPEN -> enterPhase(WheatPhase.AUTO_SELL_INTERACT);
@@ -954,7 +954,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
   private void tickLobbyHopSendIs(Minecraft mc) {
     harvestController.releaseAttack(mc);
     harvestController.releaseWalkKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     closeCurrentScreen(mc);
     sendCommand(mc, "is");
     enterPhase(WheatPhase.LOBBY_HOP_WAIT_IS);
@@ -964,7 +964,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
   private void tickLobbyHopWaitIs(Minecraft mc) {
     harvestController.releaseAttack(mc);
     harvestController.releaseWalkKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     closeCurrentScreen(mc);
     status = "Lobby hop: waiting";
     if (phaseTicks * 50 >= lobbyHopIslandWaitMs.get()) {
@@ -975,7 +975,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
   private void tickLobbyHopSendHub(Minecraft mc) {
     harvestController.releaseAttack(mc);
     harvestController.releaseWalkKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     closeCurrentScreen(mc);
     sendCommand(mc, "hub");
     hubHopSettleTicks = 0;
@@ -986,7 +986,7 @@ public final class WheatBreakerMacro extends Macro implements ConfigSection, Men
   private void tickLobbyHopSettle(Minecraft mc) {
     harvestController.releaseAttack(mc);
     harvestController.releaseWalkKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     closeCurrentScreen(mc);
     status = "Lobby hop: /hub";
     if (mc.player == null || mc.level == null) {

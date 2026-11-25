@@ -13,9 +13,9 @@ import ryzn.macro.client.config.RyznSettings;
 import ryzn.macro.client.config.groups.WalkingSettings.Control;
 import ryzn.macro.client.core.RyznBootstrap;
 import ryzn.macro.client.debug.DebugLog;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.modules.impl.combat.CombatModule;
 import ryzn.macro.client.feature.modules.impl.combat.RecordedCombatMovement;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.rotation.impl.Angle;
 import ryzn.macro.client.feature.rotation.impl.AngleUtil;
 import ryzn.macro.client.input.MacroKeys;
@@ -798,7 +798,7 @@ public class PathExecutor {
     if (waitingForJumpReplan) {
       routeHeadingYaw = Float.NaN;
       KeyBindUtil.releaseAllExcept();
-      if (PathfindCommand.isSearchPending()) {
+      if (WalkingNavigation.isSearchPending()) {
         return true;
       }
       stop();
@@ -808,7 +808,7 @@ public class PathExecutor {
     }
 
     if (rimRecovery.isWaitingForRoute()) {
-      if (PathfindCommand.isSearchPending()) {
+      if (WalkingNavigation.isSearchPending()) {
         routeHeadingYaw = Float.NaN;
         KeyBindUtil.releaseAllExcept();
         return true;
@@ -862,7 +862,7 @@ public class PathExecutor {
       phase = State.END;
       running = false;
       transmission.reset();
-      PathfindCommand.notifyArrived();
+      WalkingNavigation.notifyArrived();
       KeyBindUtil.releaseAllExcept();
       return false;
     }
@@ -1526,7 +1526,7 @@ public class PathExecutor {
       keys.add(client.options.keyShift);
     }
     if (onGround && !waterDecision.controlled() && !ledgeOn) {
-      if (PathfindCommand.isSearchPending()
+      if (WalkingNavigation.isSearchPending()
           && (!hopTerrain.safeWalkingLine(aimX, aimZ) || client.player.horizontalCollision)) {
         keys.removeIf(
             key ->
@@ -2801,7 +2801,7 @@ public class PathExecutor {
         clearRimRecoveryState();
         KeyBindUtil.releaseAllExcept();
         log("Stepped off the ledge at %s - asking for a fresh route", target);
-        if (PathfindCommand.requestReplan("landing on a ledge")) {
+        if (WalkingNavigation.requestReplan("landing on a ledge")) {
           return true;
         }
         error("Stepped off the ledge but could not ask for a new route");
@@ -3184,7 +3184,7 @@ public class PathExecutor {
   }
 
   /**
-   * Ask PathfindCommand for a new route from where the player is now to the saved goal, and stand
+   * Ask WalkingNavigation for a new route from where the player is now to the saved goal, and stand
    * down so its tick re-arms this driver once the new path lands. Returns false when the replan
    * budget is gone / native is missing, so the caller drops through to a hard abort.
    */
@@ -3194,11 +3194,11 @@ public class PathExecutor {
     // every tick spent the whole replan budget in under a second and cancelled the in-flight search
     // each
     // time, so the new route never arrived.
-    if (PathfindCommand.isSearchPending()) {
+    if (WalkingNavigation.isSearchPending()) {
       stallWatch.clearStallWatches();
       return true;
     }
-    if (PathfindCommand.requestReplan(chatReason)) {
+    if (WalkingNavigation.requestReplan(chatReason)) {
       log("replan asked: %s", reason);
       stallWatch.clearStallWatches();
       // Deliberately NOT stopping the driver. This used to set running=false and release every
@@ -3208,7 +3208,7 @@ public class PathExecutor {
       // (up to 3s in the logs) on top of a rotation-controller reset, which is what a wedge replan
       // actually felt like in game. The route is stale for the two or three ticks the search takes,
       // but
-      // stale is a better guess than frozen, and PathfindCommand hot-swaps it in place when it
+      // stale is a better guess than frozen, and WalkingNavigation hot-swaps it in place when it
       // lands.
       return true;
     }

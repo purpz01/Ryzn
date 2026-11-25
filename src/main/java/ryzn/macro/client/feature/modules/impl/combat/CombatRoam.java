@@ -18,7 +18,7 @@ import net.minecraft.util.Mth;
  * remembered clusters instead of fixating on one.
  *
  * <p>Pure state + selection: it never touches the pathfinder. {@link CombatModule} reads {@link
- * #chooseDestination} and drives {@code PathfindCommand}, so navigation has a single owner.
+ * #chooseDestination} and drives {@code WalkingNavigation}, so navigation has a single owner.
  */
 @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 public final class CombatRoam {

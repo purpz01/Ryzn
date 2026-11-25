@@ -23,8 +23,8 @@ import ryzn.macro.client.config.settings.Setting;
 import ryzn.macro.client.core.RyznBootstrap;
 import ryzn.macro.client.core.events.api.CombatSessionEvent;
 import ryzn.macro.client.core.events.api.Subscribe;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.modules.api.Module;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.pathfinder.path.PathGazeHint;
 import ryzn.macro.client.input.MacroKeys;
 
@@ -38,7 +38,7 @@ import ryzn.macro.client.input.MacroKeys;
  * the moment it dies / despawns / leaves range, then the next best is selected.
  *
  * <p><b>Approach (nav):</b> the route to the target's block is kept live <i>at all times</i> (via
- * {@link PathfindCommand}), re-planning when the target drifts past the configured move threshold.
+ * {@link WalkingNavigation}), re-planning when the target drifts past the configured move threshold.
  * Keeping it live is the point: a knockback on either side just moves the goal and the path
  * re-routes - the pathfinder is never parked mid-fight.
  *

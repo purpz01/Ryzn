@@ -29,12 +29,12 @@ import ryzn.macro.client.core.events.api.TreeChopActionEvent;
 import ryzn.macro.client.debug.MacroStateTrace;
 import ryzn.macro.client.feature.api.MenuToggle;
 import ryzn.macro.client.feature.commands.impl.MacroCommands;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.hud.SkyBlockHud;
 import ryzn.macro.client.feature.macros.api.Macro;
 import ryzn.macro.client.feature.macros.impl.foragingquest.ForagingRoute.Target;
 import ryzn.macro.client.feature.macros.impl.tree.TreeChopMacro;
 import ryzn.macro.client.feature.macros.impl.tree.TreeLogType;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.rotation.api.LookController;
 import ryzn.macro.client.feature.rotation.impl.RouteGaze;
 import ryzn.macro.client.input.GuiActionTiming;
@@ -361,7 +361,7 @@ public final class ForagingQuestUnlockerMacro extends Macro implements ConfigSec
 
   public boolean shouldLockMouse() {
     return isEnabled()
-        && (!PathfindCommand.isNavigationActive() || gaze.isOwned())
+        && (!WalkingNavigation.isNavigationActive() || gaze.isOwned())
         && look().hasAim();
   }
 
@@ -399,7 +399,7 @@ public final class ForagingQuestUnlockerMacro extends Macro implements ConfigSec
     }
 
     if (travelActions.consumeRyanReject()) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       releaseAllKeys(mc.options);
       RyznBootstrap.failsafeManager().expectServerRotation();
       setState(ForagingQuestState.RYAN_REJECTED);
@@ -1089,7 +1089,7 @@ public final class ForagingQuestUnlockerMacro extends Macro implements ConfigSec
     }
     final Target travel = grind().leg().travel();
     if (travelActions.isWithinTargetRadius(player, travel, 10.0)) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       setState(ForagingQuestState.START_COLLECTION_CHOP);
       return;
     }
@@ -1122,7 +1122,7 @@ public final class ForagingQuestUnlockerMacro extends Macro implements ConfigSec
       return;
     }
     stopQuestChop();
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     actionTiming.clearPathRequest();
     stateTicks = 0;
     RyznBootstrap.eventBus()
@@ -1487,7 +1487,7 @@ public final class ForagingQuestUnlockerMacro extends Macro implements ConfigSec
   private void tickFailed(Minecraft mc) {
     stateTicks++;
     releaseAllKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     if (chopSession.wasStartedByQuest()
         && RyznBootstrap.macroManager().getByClass(TreeChopMacro.class).isRunning()) {
       RyznBootstrap.eventBus().post(new TreeChopActionEvent(TreeChopActionEvent.Action.STOP));
@@ -1832,7 +1832,7 @@ public final class ForagingQuestUnlockerMacro extends Macro implements ConfigSec
   private void stopAll(String reason, boolean completed) {
     final Minecraft mc = Minecraft.getInstance();
     releaseAllKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     if (chopSession.wasStartedByQuest()
         && RyznBootstrap.macroManager().getByClass(TreeChopMacro.class).isRunning()) {
       RyznBootstrap.eventBus().post(new TreeChopActionEvent(TreeChopActionEvent.Action.STOP));
@@ -1841,7 +1841,7 @@ public final class ForagingQuestUnlockerMacro extends Macro implements ConfigSec
     if (mc.gui.screen() != null && macroScreenOpened) {
       closeCurrentScreen(mc);
     }
-    PathfindCommand.setSneak(false);
+    WalkingNavigation.setSneak(false);
     resetRuntime();
     enabled.set(false);
     lastRunCompleted = completed;

@@ -5,8 +5,8 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.modules.impl.combat.CombatSight;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.rotation.api.LookController;
 
 /**
@@ -220,9 +220,9 @@ public final class RouteGaze {
     // on anything about the target. The curve is a fit over the next few blocks and holds still
     // through
     // the same corner. NaN (no curve, or the run-out at the end of a route) falls back unchanged.
-    float routeYaw = PathfindCommand.lookPathHeadingYaw();
+    float routeYaw = WalkingNavigation.lookPathHeadingYaw();
     if (Float.isNaN(routeYaw)) {
-      routeYaw = PathfindCommand.routeHeadingYaw();
+      routeYaw = WalkingNavigation.routeHeadingYaw();
     }
     if (Float.isNaN(routeYaw)) {
       return false;

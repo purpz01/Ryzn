@@ -18,7 +18,6 @@ import ryzn.macro.client.core.events.api.SandMinerActionEvent;
 import ryzn.macro.client.core.events.api.TreeChopActionEvent;
 import ryzn.macro.client.core.events.api.WheatBreakerActionEvent;
 import ryzn.macro.client.debug.DebugLog;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.impl.bea.BeaMacro;
 import ryzn.macro.client.feature.macros.impl.carpentry.CarpentryUnlockMacro;
 import ryzn.macro.client.feature.macros.impl.foraging.AfkAutoHarpMacro;
@@ -33,6 +32,7 @@ import ryzn.macro.client.feature.macros.impl.slayer.RevSlayerMacro;
 import ryzn.macro.client.feature.macros.impl.tree.TreeChopMacro;
 import ryzn.macro.client.feature.macros.impl.wheat.WheatBreakerMacro;
 import ryzn.macro.client.feature.modules.impl.combat.CombatModule;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.util.gui.ScreenOwner;
 import ryzn.macro.client.util.text.RyznChat;
 import ryzn.pathfinding.PathManager;
@@ -116,7 +116,7 @@ final class FailsafeStopper {
       RyznBootstrap.eventBus().post(CombatSessionEvent.stop());
     }
 
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     PathManager.cancelSearch();
 
     Minecraft client = Minecraft.getInstance();

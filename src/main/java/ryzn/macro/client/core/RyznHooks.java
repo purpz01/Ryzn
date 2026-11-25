@@ -116,7 +116,7 @@ public final class RyznHooks {
           resolved = RyznBootstrap.eventBus().post(new PlayerInputEvent(original)).result();
         }
         driving =
-            ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand.isRouteDriving();
+            ryzn.macro.client.feature.pathfinder.WalkingNavigation.isRouteDriving();
         if (!driving && resolved == original && !RyznBootstrap.macroManager().anyMacroRunning()) {
           resolved = RyznMenuMovement.resolve(original);
         }

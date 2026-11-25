@@ -5,9 +5,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import ryzn.macro.client.core.RyznBootstrap;
 import ryzn.macro.client.feature.commands.impl.MacroCommands;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.impl.level7.AutoLvl7Macro.State;
 import ryzn.macro.client.feature.macros.impl.sand.SandMinerMacro;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.world.WorldChangeDetector;
 
 /**
@@ -155,7 +155,7 @@ final class Level7Travel {
     if (sendingToServerDetected || (atWarpTicks > 0 && levelKey(mc) != transferLevelKey)) {
       // transferLevelKey was captured on entry (the pre-transfer world); route A waits for it to
       // change.
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       hunt.setState(State.SERVER_TRANSFER_DETECTED);
       return;
     }
@@ -199,7 +199,7 @@ final class Level7Travel {
       }
       case 1 -> {
         if (wasLaunched(player, transferRouteA)) {
-          PathfindCommand.stopNavQuiet();
+          WalkingNavigation.stopNavQuiet();
           transferStep = 2;
           transferDelayTicks = 0;
           hunt.waitReason = "Route A reached; waiting 3s before Sand route";
@@ -240,7 +240,7 @@ final class Level7Travel {
           return;
         }
         if (isNearTransferTarget(player, sandStartNode)) {
-          PathfindCommand.stopNavQuiet();
+          WalkingNavigation.stopNavQuiet();
           hunt.setState(State.SAND_PHASE);
           return;
         }
@@ -250,10 +250,10 @@ final class Level7Travel {
   }
 
   void keepTransferRouteRunning(int[] route, String label) {
-    if (PathfindCommand.isNavigationActive()) {
+    if (WalkingNavigation.isNavigationActive()) {
       // Only a route that actually DRIVES clears the counter; a search still in flight has proven
       // nothing.
-      if (PathfindCommand.isRouteDriving()) {
+      if (WalkingNavigation.isRouteDriving()) {
         routeAttempts = 0;
       }
       hunt.waitReason = label + "; walking to destination";
@@ -290,7 +290,7 @@ final class Level7Travel {
       return;
     }
     transferRetryCooldown = TRANSFER_RETRY_COOLDOWN_TICKS;
-    if (PathfindCommand.startToQuiet(route[0], route[1], route[2])) {
+    if (WalkingNavigation.startToQuiet(route[0], route[1], route[2])) {
       hunt.waitReason = label + "; walking to destination";
       return;
     }

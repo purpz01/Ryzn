@@ -41,15 +41,15 @@ import ryzn.macro.client.core.events.api.GameMessageEvent;
 import ryzn.macro.client.core.events.api.Subscribe;
 import ryzn.macro.client.debug.DebugLog;
 import ryzn.macro.client.debug.MacroStateTrace;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.api.Macro;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.rotation.api.RotationActivity;
 import ryzn.macro.client.feature.rotation.impl.RouteGaze;
 import ryzn.macro.client.input.GuiActionTiming;
 import ryzn.macro.client.input.MacroActionTiming;
 import ryzn.macro.client.input.MacroKeys;
-import ryzn.macro.client.util.inventory.CraftGridFill;
 import ryzn.macro.client.util.inventory.CraftGridFill.Outcome;
+import ryzn.macro.client.util.inventory.CraftGridFill;
 import ryzn.macro.client.util.inventory.MacroSlots;
 import ryzn.macro.client.util.text.RyznChat;
 import ryzn.macro.client.util.world.MacroObstruction;
@@ -266,7 +266,7 @@ public final class BeaMacro extends Macro {
       return true;
     } // watching Bea mid-route; the executor keeps steering the body
     return (state == State.ROTATE_TO_BEA || state == State.INTERACT_BEA)
-        && !PathfindCommand.isNavigationActive();
+        && !WalkingNavigation.isNavigationActive();
   }
 
   /**
@@ -322,7 +322,7 @@ public final class BeaMacro extends Macro {
    * frame.
    */
   public void tickLook() {
-    if (!shouldLockMouse() || (PathfindCommand.isNavigationActive() && !gaze.isOwned())) {
+    if (!shouldLockMouse() || (WalkingNavigation.isNavigationActive() && !gaze.isOwned())) {
       return;
     }
     final LocalPlayer player = Minecraft.getInstance().player;
@@ -384,13 +384,13 @@ public final class BeaMacro extends Macro {
     }
 
     if (mc.gui.screen() != null) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       status = "Paused while a screen is open";
       return;
     }
 
     if (beaTarget.isNear(player)) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       setState(afterPathingState());
       return;
     }
@@ -398,7 +398,7 @@ public final class BeaMacro extends Macro {
     if (!actionTiming.isPathRequested()) {
       BlockPos position = beaTarget.position();
       final boolean started =
-          PathfindCommand.startToQuiet(position.getX(), position.getY(), position.getZ());
+          WalkingNavigation.startToQuiet(position.getX(), position.getY(), position.getZ());
       if (!started) {
         fail("Could not start path to Bea");
         return;
@@ -412,9 +412,9 @@ public final class BeaMacro extends Macro {
     // of
     // aborting; otherwise re-issue the path to close the remaining gap, bounded by the overall
     // timeout.
-    if (!PathfindCommand.isNavigationActive() && stateTicks > 20) {
+    if (!WalkingNavigation.isNavigationActive() && stateTicks > 20) {
       if (beaTarget.isNear(player)) {
-        PathfindCommand.stopNavQuiet();
+        WalkingNavigation.stopNavQuiet();
         setState(afterPathingState());
         return;
       }
@@ -647,7 +647,7 @@ public final class BeaMacro extends Macro {
     }
     releaseAllKeys(mc.options);
     status = "Sidestepping for a clear view of Bea";
-    PathfindCommand.startToQuiet(side.getX(), side.getY(), side.getZ());
+    WalkingNavigation.startToQuiet(side.getX(), side.getY(), side.getZ());
   }
 
   private void tickBuyBeePet(Minecraft mc, LocalPlayer player) {
@@ -978,7 +978,7 @@ public final class BeaMacro extends Macro {
   private void stopAll(String reason, boolean completed) {
     final Minecraft mc = Minecraft.getInstance();
     releaseAllKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     if (mc.gui.screen() != null && screens.shouldClose(mc, craftSession, petSession)) {
       closeCurrentScreen(mc);
     }

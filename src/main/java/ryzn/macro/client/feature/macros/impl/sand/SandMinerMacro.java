@@ -25,8 +25,8 @@ import ryzn.macro.client.core.events.api.GameMessageEvent;
 import ryzn.macro.client.core.events.api.SandMinerActionEvent;
 import ryzn.macro.client.core.events.api.Subscribe;
 import ryzn.macro.client.feature.api.MenuToggle;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.api.Macro;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.input.MacroKeys;
 import ryzn.macro.client.util.inventory.MacroSlots;
 import ryzn.macro.client.util.inventory.VanillaTools;
@@ -263,7 +263,7 @@ public final class SandMinerMacro extends Macro implements ConfigSection, MenuTo
       targetInitialized = false;
       MacroInput.setAttackHeld(mc.options, false);
       if (mc.gui.screen() != null) {
-        PathfindCommand.stopNavQuiet();
+        WalkingNavigation.stopNavQuiet();
         joiningRoute = false;
         activeRoute = null;
         return;
@@ -271,12 +271,12 @@ public final class SandMinerMacro extends Macro implements ConfigSection, MenuTo
       int[] entry = activeRoute.get(routeIndex);
       if (reached(entry, player.getX(), player.getZ())
           && Math.abs(player.getY() - entry[1]) <= 1.5) {
-        PathfindCommand.stopNavQuiet();
+        WalkingNavigation.stopNavQuiet();
         joiningRoute = false;
         pickWaypointJitter();
       } else {
         status = "Pathfinding to route start";
-        if (++joinTicks >= 1200 || !PathfindCommand.isNavigationActive()) {
+        if (++joinTicks >= 1200 || !WalkingNavigation.isNavigationActive()) {
           setEnabled(false);
           RyznChat.send("Sand Miner could not reach its route start.");
         }
@@ -471,7 +471,7 @@ public final class SandMinerMacro extends Macro implements ConfigSection, MenuTo
     }
     int[] entry = activeRoute.get(routeIndex);
     stopInputs(Minecraft.getInstance());
-    joiningRoute = PathfindCommand.startToQuiet(entry[0], entry[1], entry[2]);
+    joiningRoute = WalkingNavigation.startToQuiet(entry[0], entry[1], entry[2]);
     joinTicks = 0;
     if (!joiningRoute) {
       setEnabled(false);
@@ -685,7 +685,7 @@ public final class SandMinerMacro extends Macro implements ConfigSection, MenuTo
   private void resetSession() {
     preparedRoute = -1;
     if (joiningRoute) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
     }
     stopInputs(Minecraft.getInstance());
     joiningRoute = false;
