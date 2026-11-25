@@ -24,7 +24,7 @@ import net.minecraft.world.phys.Vec3;
 import ryzn.macro.client.config.RyznSettings;
 import ryzn.macro.client.core.RyznBootstrap;
 import ryzn.macro.client.debug.DebugLog;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.input.MacroKeys;
 
 @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
@@ -412,14 +412,14 @@ final class WheatHarvestController {
     releaseAttack(mc);
     releaseWalkKeys(mc.options);
     if (stopNavigation) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
     }
     clearAim();
   }
 
   void clearAim() {
     RyznBootstrap.rotationManager().resetAim(this);
-    lookMotion.reset();
+    lookMotion.clearTarget();
     stopSweep();
     miningTarget = null;
   }

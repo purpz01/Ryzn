@@ -18,9 +18,9 @@ import ryzn.macro.client.core.events.api.GoldShovelActionEvent;
 import ryzn.macro.client.core.events.api.RevLevel2ActionEvent;
 import ryzn.macro.client.core.events.api.Subscribe;
 import ryzn.macro.client.feature.api.MenuToggle;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.api.Macro;
 import ryzn.macro.client.feature.macros.impl.goldshovel.GoldShovelMacro;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.rotation.api.LookController;
 import ryzn.macro.client.util.gui.MacroScreens;
 import ryzn.macro.client.util.text.RyznChat;
@@ -464,7 +464,7 @@ public final class RevLevel2Macro extends Macro implements MenuToggle {
     }
     look().clear();
     if (next != State.PATH_TO_WEAPONSMITH) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
     }
   }
 
@@ -491,7 +491,7 @@ public final class RevLevel2Macro extends Macro implements MenuToggle {
 
   private void releaseControls() {
     final Minecraft mc = Minecraft.getInstance();
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     look().clear();
     combat.stop();
     if (RyznBootstrap.macroManager().getByClass(GoldShovelMacro.class).isEnabled()) {

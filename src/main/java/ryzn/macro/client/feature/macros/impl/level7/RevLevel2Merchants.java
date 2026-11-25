@@ -8,8 +8,8 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import ryzn.macro.client.MacroInput;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.impl.level7.RevLevel2Macro.State;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.input.GuiActionTiming;
 import ryzn.macro.client.util.entity.MacroEntities;
 import ryzn.macro.client.util.world.MacroObstruction;
@@ -59,7 +59,7 @@ final class RevLevel2Merchants {
     hunt.look().clear();
     final Entity npc = findMerchant(level, name, WEAPONSMITH_POSITION);
     if (npc != null && canInteract(level, player, npc)) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       hunt.setState(next, "At " + name);
       return;
     }
@@ -75,9 +75,9 @@ final class RevLevel2Merchants {
     if (atUsualSpot && !approachMerchant) {
       approachMerchant = true;
       hunt.pathRetryTicks = 0;
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
     }
-    if (PathfindCommand.isNavigationActive()) {
+    if (WalkingNavigation.isNavigationActive()) {
       hunt.status = "Walking to " + name;
       return;
     }
@@ -93,7 +93,7 @@ final class RevLevel2Merchants {
     final boolean toMerchant = npc != null && (usualSpot == null || approachMerchant);
     final int goalX = toMerchant ? npc.getBlockX() : usualSpot.getX();
     final int goalZ = toMerchant ? npc.getBlockZ() : usualSpot.getZ();
-    if (PathfindCommand.startToQuiet(goalX, WEAPONSMITH_POSITION.getY(), goalZ)) {
+    if (WalkingNavigation.startToQuiet(goalX, WEAPONSMITH_POSITION.getY(), goalZ)) {
       hunt.status = "Pathfinding to " + name;
     } else {
       hunt.status = "Waiting for pathfinder (" + hunt.pathAttempts + "/" + MAX_PATH_ATTEMPTS + ")";

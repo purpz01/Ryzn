@@ -8,8 +8,8 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import ryzn.macro.client.debug.DebugLog;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.impl.tree.TreeChopMacro.State;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.mixin.accessor.MultiPlayerGameModeAccessor;
 
 /**
@@ -296,7 +296,7 @@ final class TreeChopBreaking {
     if (candidate == null) {
       return;
     }
-    if (treeChop.state == State.PATH_TO_CLUSTER && PathfindCommand.isNavigationActive()) {
+    if (treeChop.state == State.PATH_TO_CLUSTER && WalkingNavigation.isNavigationActive()) {
       return;
     }
     if (treeChop.targetState.noteAimCandidate(candidate, CROSSHAIR_BLOCKED_TIMEOUT_TICKS)) {

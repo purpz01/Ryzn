@@ -13,7 +13,6 @@ import ryzn.macro.client.core.events.api.EventBus;
 import ryzn.macro.client.core.events.api.GameMessageEvent;
 import ryzn.macro.client.core.events.api.StartMainRenderEvent;
 import ryzn.macro.client.feature.commands.api.RyznCommands;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.impl.bea.BeaMacro;
 import ryzn.macro.client.feature.macros.impl.carpentry.CarpentryUnlockMacro;
 import ryzn.macro.client.feature.macros.impl.foraging.AfkAutoHarpMacro;
@@ -29,6 +28,7 @@ import ryzn.macro.client.feature.macros.impl.tree.TreeChopMacro;
 import ryzn.macro.client.feature.macros.impl.wheat.WheatBreakerMacro;
 import ryzn.macro.client.feature.modules.impl.combat.CombatModule;
 import ryzn.macro.client.feature.pathfinder.PathRenderer;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.pathfinder.path.PathExecutor;
 import ryzn.macro.client.feature.reconnect.HypixelLocation;
 import ryzn.macro.client.feature.reconnect.MacroReconnect;
@@ -126,7 +126,7 @@ final class RyznModules {
     bus.subscribe(
         GameMessageEvent.class,
         RyznBootstrap.macroManager().getByClass(RevLevel2Macro.class)::onGameMessageEvent);
-    registerMacroTick(PathfindCommand::tick);
+    registerMacroTick(WalkingNavigation::tick);
     registerMacroTick(RyznBootstrap.macroManager().getByClass(BeaMacro.class)::onClientTick);
     registerMacroTick(RyznBootstrap.macroManager().getByClass(GoldShovelMacro.class)::onClientTick);
     registerMacroTick(

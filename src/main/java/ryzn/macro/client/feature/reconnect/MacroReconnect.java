@@ -26,30 +26,9 @@ import ryzn.macro.client.util.text.RyznChat;
 import ryzn.macro.client.world.WorldChangeDetector;
 
 /**
- * Gets an unattended grind back to SkyBlock after the three ways Hypixel takes it away: a dropped
- * connection, a limbo route, and a kick into the SkyBlock lobby. Global and macro-agnostic: it only
- * cares THAT a macro was running, never which one. Where to go once SkyBlock is reached is left to
- * the {@link ReconnectRejoinEvent} subscribers.
- *
- * <p>A drop is decided by the screen - vanilla shows a {@link DisconnectedScreen} when the
- * connection is lost and the title screen when the player quits on purpose. Limbo and kicks never
- * produce a screen at all (the socket stays up, the server just moves you), so those are read from
- * chat, which is how SkyHanni, aether and V5 all detect them.
- *
- * <p>"A macro was running" is LATCHED, not sampled. Hypixel's real eviction order is world-change
- * first, socket death second, and our own world-change failsafe stops the macro in between -
- * sampling at the moment the disconnect screen appears always saw "nothing running" and never
- * rearmed. Only a deliberate {@link #disarm()} clears it.
- *
- * <p>The way back is {@code /lobby}, {@code /play skyblock}, then {@code /hub}. Stages are gated on
- * the world ACTUALLY changing and on Hypixel ACTUALLY reporting SkyBlock ({@link HypixelLocation})
- * rather than on a fixed delay - under the lag that caused the drop, a timer fires into a world
- * that has not caught up yet. Retries slow down instead of giving up, because "slow" and "dead"
- * look identical from here and only one of them is worth abandoning a session over.
- *
- * <p>Anti-detection: the rejoin is vanilla's own {@link ConnectScreen} join flow, the same code
- * path as a human clicking the server - no packet is crafted, blocked or replayed. Every delay is
- * randomized.
+ * Coordinates reconnect after a network disconnect, a limbo transfer, or a move to the lobby.
+ * Arming is retained across world changes because the failsafe can stop the active macro before the
+ * disconnect screen opens. Rejoin subscribers handle recovery after SkyBlock becomes available.
  */
 @Accessors(fluent = true)
 public final class MacroReconnect {

@@ -34,7 +34,6 @@ import ryzn.macro.client.core.events.api.SandMinerActionEvent;
 import ryzn.macro.client.core.events.api.Subscribe;
 import ryzn.macro.client.core.events.api.WheatBreakerActionEvent;
 import ryzn.macro.client.feature.api.MenuToggle;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.hud.card.HudFormat;
 import ryzn.macro.client.feature.macros.api.Macro;
 import ryzn.macro.client.feature.macros.impl.bea.BeaMacro;
@@ -43,6 +42,7 @@ import ryzn.macro.client.feature.macros.impl.goldshovel.GoldShovelMacro;
 import ryzn.macro.client.feature.macros.impl.level7.Level7Checkpoints.Checkpoint;
 import ryzn.macro.client.feature.macros.impl.level7.Level7Checkpoints.Stage;
 import ryzn.macro.client.feature.macros.impl.miningmerchant.MiningMerchantMacro;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.util.text.RyznChat;
 
 /**
@@ -706,7 +706,7 @@ public final class AutoLvl7Macro extends Macro implements ConfigSection, MenuTog
       case HUB_WARP -> {
         RyznBootstrap.eventBus()
             .post(new SandMinerActionEvent(SandMinerActionEvent.Action.SET_ENABLED, false));
-        PathfindCommand.stopNavQuiet();
+        WalkingNavigation.stopNavQuiet();
         activeChild = ActiveChild.NONE;
         travel.sendHubWarp(Minecraft.getInstance());
       }
@@ -719,7 +719,7 @@ public final class AutoLvl7Macro extends Macro implements ConfigSection, MenuTog
             .post(
                 new ForagingQuestActionEvent(
                     ForagingQuestActionEvent.Action.SET_CLEAR_INVENTORY_AT_MERCHANT, false));
-        PathfindCommand.stopNavQuiet();
+        WalkingNavigation.stopNavQuiet();
         activeChild = ActiveChild.NONE;
         travel.sendHubWarp(Minecraft.getInstance());
       }
@@ -736,7 +736,7 @@ public final class AutoLvl7Macro extends Macro implements ConfigSection, MenuTog
       case DONE -> {
         RyznBootstrap.eventBus()
             .post(new SandMinerActionEvent(SandMinerActionEvent.Action.SET_ENABLED, false));
-        PathfindCommand.stopNavQuiet();
+        WalkingNavigation.stopNavQuiet();
         activeChild = ActiveChild.NONE;
         waitReason = "Complete";
         active = false;

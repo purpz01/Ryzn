@@ -69,10 +69,7 @@ public final class DebugLog {
    */
   private static boolean macroRunning() {
     final long now = System.currentTimeMillis();
-    // Both, because neither list is complete on its own: MacroLook knows about Torrhus,
-    // Dwarven
-    // and Can of Worms, and the failsafe's list knows about a bare pathfind and the accessory
-    // sorter.
+    // Include registered macros and standalone automation so shutdown diagnostics survive both.
     if (RyznBootstrap.macroManager().anyMacroRunning()
         || RyznBootstrap.failsafeManager().automationActive()) {
       macroActiveUntilMs = now + MACRO_QUIET_GRACE_MS;

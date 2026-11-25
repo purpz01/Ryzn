@@ -15,8 +15,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 import ryzn.macro.client.config.RyznSettings;
 import ryzn.macro.client.debug.DebugLog;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.modules.impl.combat.CombatModule.ManagedAttackMode;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.pathfinder.path.PathExecutor;
 
 /**
@@ -131,7 +131,7 @@ final class CombatTargetController {
    * bot wedging against an unreachable mob.
    */
   void detectPathFailure(RyznSettings cfg) {
-    final int seq = PathfindCommand.getNavFailSeq();
+    final int seq = WalkingNavigation.getNavFailSeq();
     if (!combat.pathFailures.record(
         seq, combat.state.target != null && combat.nav.isOwned(), MAX_PATH_FAILURES)) {
       return;
@@ -346,7 +346,7 @@ final class CombatTargetController {
           combat.state.target = null;
           combat.nav.forgetPlan();
           combat.pathFailures.resetCount();
-          combat.pathFailures.consumeIfChanged(PathfindCommand.getNavFailSeq());
+          combat.pathFailures.consumeIfChanged(WalkingNavigation.getNavFailSeq());
           if (shouldRememberTargets(cfg)) {
             combat.roam.remember(
                 lost.getX(), lost.getY(), lost.getZ(), combat.resolved().avoidDanger());
@@ -395,7 +395,7 @@ final class CombatTargetController {
       // Consume any failure of the dead target's still-resolving plan, so it cannot be
       // misattributed to
       // the roam that starts next tick (it was deleting the freshly chosen search spot).
-      combat.pathFailures.consumeIfChanged(PathfindCommand.getNavFailSeq());
+      combat.pathFailures.consumeIfChanged(WalkingNavigation.getNavFailSeq());
     }
 
     // Instant reacquire: select the next valid mob THIS tick. Prefer the best mob in clear sight;

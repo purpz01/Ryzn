@@ -13,7 +13,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import ryzn.macro.client.core.RyznBootstrap;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 
 /**
  * Who holds the head while a route walks the body to the next tree.
@@ -159,7 +159,7 @@ final class TreeChopGaze {
    * #BACKSTEP_LIMIT_DEGREES}.
    */
   private static boolean routeWouldBackstep(LocalPlayer player, BlockPos trunk, boolean owned) {
-    final float routeYaw = PathfindCommand.routeHeadingYaw();
+    final float routeYaw = WalkingNavigation.routeHeadingYaw();
     if (Float.isNaN(routeYaw)) {
       return true;
     }

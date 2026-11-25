@@ -1,12 +1,10 @@
 package ryzn.swift.cache;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -76,7 +74,7 @@ public final class CachedWorld {
 
   private static volatile ConcurrentHashMap<Long, CachedChunk> chunks =
       new ConcurrentHashMap<>(512);
-  private static final ConcurrentLinkedQueue<Long> pendingChunks = new ConcurrentLinkedQueue<>();
+  private static final PendingChunks pendingChunks = new PendingChunks();
   // Low-priority reconcile queue: client-loaded chunks re-classified live after a swap/load
   // settles. The
   // swap guards drop the warp burst on purpose, so without this the cache serves persisted geometry
@@ -105,8 +103,6 @@ public final class CachedWorld {
   private static short[] nativeScratch = new short[0];
 
   // Single-entry hot-chunk hint; deliberately non-volatile (best-effort).
-  private static long cacheKey = Long.MIN_VALUE;
-  private static CachedChunk cacheChunk = null;
 
   // Disk lifecycle: the currently-active world/lobby key (null when detached), a small debounce so
   // a
@@ -190,18 +186,11 @@ public final class CachedWorld {
     final int chunkZ = z >> 4;
     final long key = chunkKey(chunkX, chunkZ);
 
-    final CachedChunk cached = cacheChunk;
-    if (cacheKey == key && cached != null && cached.ready) {
-      return cached.getCode(x & 15, y, z & 15);
-    }
-
     final CachedChunk chunk = chunks.get(key);
     if (chunk == null || !chunk.ready) {
       return null;
     }
 
-    cacheKey = key;
-    cacheChunk = chunk;
     return chunk.getCode(x & 15, y, z & 15);
   }
 
@@ -249,9 +238,6 @@ public final class CachedWorld {
     final short code = NativeStateEncoder.codeForState(state);
     chunk.setCode(x & 15, y, z & 15, code);
     queueNativeUpdate(x, y, z, code);
-    if (cacheKey == key) {
-      cacheChunk = chunk;
-    }
     markDirty(key);
     // An edge cell also decides whether the neighbour's border blocks count as buried on disk.
     final int localX = x & 15;
@@ -316,28 +302,13 @@ public final class CachedWorld {
         pendingLiveReingest = false;
         queueLoadedClientChunksForReingest(level);
       }
-      List<Long> requeue = null;
-      int budget = Swift.CHUNKS_PER_TICK;
-      while (budget > 0) {
-        final Long nextBoxed = pendingChunks.poll();
-        if (nextBoxed == null) {
-          break;
-        }
-        budget--;
-        final long next = nextBoxed;
-        if (!processLoadedChunk(level, minY, maxY, (int) (next >> 32), (int) next)) {
-          if (requeue == null) {
-            requeue = new ArrayList<>(4);
-          }
-          requeue.add(next); // chunk not ready in the live world yet; retry next tick
-        }
-      }
-      if (requeue != null) {
-        pendingChunks.addAll(requeue);
-      }
-      // Leftover budget reconciles reingest chunks. No requeue on failure: a miss means the client
-      // no
-      // longer has the chunk, and a re-stream re-enqueues it through the normal packet path anyway.
+      // Leave room for live reconciliation while it is queued.
+      final int packetBudget = Swift.CHUNKS_PER_TICK - (reingestChunks.isEmpty() ? 0 : 1);
+      int budget =
+          Swift.CHUNKS_PER_TICK
+              - pendingChunks.process(
+                  packetBudget,
+                  key -> processLoadedChunk(level, minY, maxY, (int) (key >> 32), (int) key));
       while (budget > 0) {
         final Long nextBoxed = reingestChunks.poll();
         if (nextBoxed == null) {
@@ -429,9 +400,6 @@ public final class CachedWorld {
 
     cached.ready = true;
     chunks.put(key, cached);
-    if (cacheKey == key) {
-      cacheChunk = cached;
-    }
     syncChunkToNative(chunkX, chunkZ, cached);
     markDirty(key);
     markDirty(chunkKey(chunkX - 1, chunkZ));
@@ -512,8 +480,6 @@ public final class CachedWorld {
         evicted.put(keys[i], removed);
       }
     }
-    cacheKey = Long.MIN_VALUE;
-    cacheChunk = null;
     final WorldSerializer.DiskCache target = disk;
     if (target != null && !evicted.isEmpty()) {
       Swift.io.submit(() -> WorldSerializer.retain(target, evicted, live));
@@ -701,8 +667,6 @@ public final class CachedWorld {
     pendingChunks.clear();
     reingestChunks.clear();
     pendingNativeUpdates.clear();
-    cacheKey = Long.MIN_VALUE;
-    cacheChunk = null;
     worldSessionSettleTicks = Math.max(worldSessionSettleTicks, WORLD_SESSION_SETTLE_TICKS);
     areaConfirm.onWorldSessionBoundary();
     boundarySinceLoad = true;
@@ -941,17 +905,20 @@ public final class CachedWorld {
   public static void saveAndClear(String key) {
     final Map<Long, CachedChunk> mapToSave = chunks;
     final WorldSerializer.DiskCache target = disk;
-    final boolean shouldSave =
-        !isCacheLoading
-            && cacheDirty
-            && target != null
-            && target.name().equals(key)
-            && hasReadyChunk(mapToSave);
+    final boolean canSave =
+        !isCacheLoading && target != null && target.name().equals(key) && hasReadyChunk(mapToSave);
+    final boolean changed = cacheDirty;
     final Set<Long> dirty = drainDirty();
     resetState();
     setLoadingState(false);
-    if (shouldSave) {
-      Swift.io.submit(() -> WorldSerializer.save(target, mapToSave, dirty));
+    if (canSave) {
+      Swift.io.submit(
+          () -> {
+            // Check after earlier queued writes have finished.
+            if (changed || target.writeFailed()) {
+              WorldSerializer.save(target, mapToSave, dirty);
+            }
+          });
     }
   }
 
@@ -1038,8 +1005,6 @@ public final class CachedWorld {
     pendingChunks.clear();
     reingestChunks.clear();
     pendingNativeUpdates.clear();
-    cacheKey = Long.MIN_VALUE;
-    cacheChunk = null;
     pendingNativeResync = true;
     nativeWorldToken = "";
     cacheDirty = false;
@@ -1055,7 +1020,7 @@ public final class CachedWorld {
   }
 
   private static void maybePeriodicSave() {
-    if (!cacheDirty || isCacheLoading) {
+    if (isCacheLoading) {
       return;
     }
     final String key = activeKey;
@@ -1064,7 +1029,7 @@ public final class CachedWorld {
       return;
     }
     final ConcurrentHashMap<Long, CachedChunk> snapshot = chunks;
-    if (!hasReadyChunk(snapshot)) {
+    if ((!cacheDirty && !target.writeFailed()) || !hasReadyChunk(snapshot)) {
       return;
     }
     cacheDirty = false;
@@ -1332,7 +1297,10 @@ public final class CachedWorld {
       final Map.Entry<Long, Integer> e = it.next();
       final long blockKey = e.getKey();
       final int flags = e.getValue();
-      it.remove();
+      // Leave a newer packet queued if it arrived while this entry was being read.
+      if (!pendingNativeUpdates.remove(blockKey, flags)) {
+        continue;
+      }
 
       if (offset + 4 > updates.length) {
         final int[] grown = new int[Math.max(updates.length << 1, offset + 4)];

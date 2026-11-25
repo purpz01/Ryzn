@@ -10,14 +10,7 @@ import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.resources.Identifier;
 import ryzn.macro.client.mixin.accessor.RenderTypeAccessor;
 
-/**
- * The vanilla LINES pipeline with the depth test forced to pass, so a line stays visible behind
- * terrain.
- *
- * <p>Shared rather than per-feature: two of these would be two GPU pipelines doing the same thing,
- * and the route overlay and the hotspot pointer both want exactly it. Same approach Skyblocker
- * takes for its cursor line.
- */
+/** Shares a line render type that keeps world overlays visible through terrain. */
 public final class SeeThroughLines {
 
   private static RenderPipeline pipeline;

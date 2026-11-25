@@ -12,7 +12,9 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongFunction;
 import lombok.Getter;
@@ -94,6 +96,14 @@ public final class WorldSerializer {
   public static final class DiskCache {
     @Getter private final String name;
     private final Map<Long, Encoded> records = new HashMap<>();
+    private final Set<Long> pendingDirty = new HashSet<>();
+
+    // Read by the client tick to schedule a retry after a failed write.
+    private volatile boolean writeFailed;
+
+    boolean writeFailed() {
+      return writeFailed;
+    }
 
     /** True once {@link #records} reflects the file on disk. */
     private boolean primed;
@@ -107,15 +117,19 @@ public final class WorldSerializer {
    * isolated: failure is logged, never thrown.
    */
   public static void save(DiskCache disk, Map<Long, CachedChunk> live, Collection<Long> dirty) {
+    disk.pendingDirty.addAll(dirty);
     try {
       Files.createDirectories(CACHE_DIR);
       cleanStaleTempFiles();
       prime(disk);
-      for (Long key : dirty) {
+      for (Long key : disk.pendingDirty) {
         encodeInto(disk, live::get, key, live.get(key));
       }
       write(disk);
+      disk.pendingDirty.clear();
+      disk.writeFailed = false;
     } catch (Exception e) {
+      disk.writeFailed = true;
       logger.warn("[ryzn-cache] failed to save cache '{}'", disk.name, e);
     }
   }

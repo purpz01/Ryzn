@@ -17,7 +17,6 @@ import ryzn.macro.client.feature.failsafe.impl.FailsafeManagerImpl;
 import ryzn.macro.client.feature.macros.api.MacroManager;
 import ryzn.macro.client.feature.macros.impl.MacroManagerImpl;
 import ryzn.macro.client.feature.modules.api.ModuleManager;
-import ryzn.macro.client.feature.modules.impl.ModuleManagerImpl;
 import ryzn.macro.client.feature.reconnect.MacroReconnect;
 import ryzn.macro.client.feature.rotation.api.RotationManager;
 import ryzn.macro.client.feature.rotation.impl.RotationManagerImpl;
@@ -30,7 +29,7 @@ public final class RyznBootstrap {
   private static final EventBus eventBus =
       new EventBusImpl(RyznBootstrap::fail, RyznBootstrap::isReady);
 
-  @Getter private static final ModuleManager moduleManager = new ModuleManagerImpl();
+  @Getter private static final ModuleManager moduleManager = new ModuleManager();
   @Getter private static final CommandManager commandManager = new CommandManagerImpl();
   @Getter private static final MacroManager macroManager = new MacroManagerImpl();
   @Getter private static final FailsafeManager failsafeManager = new FailsafeManagerImpl();

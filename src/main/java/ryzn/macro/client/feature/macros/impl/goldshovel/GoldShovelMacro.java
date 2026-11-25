@@ -28,8 +28,8 @@ import ryzn.macro.client.core.events.api.GameMessageEvent;
 import ryzn.macro.client.core.events.api.GoldShovelActionEvent;
 import ryzn.macro.client.core.events.api.Subscribe;
 import ryzn.macro.client.debug.MacroStateTrace;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.api.Macro;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.rotation.api.LookController;
 import ryzn.macro.client.feature.rotation.impl.RouteGaze;
 import ryzn.macro.client.input.GuiActionTiming;
@@ -44,7 +44,7 @@ import ryzn.macro.client.util.world.MacroObstruction;
  * Shovel via {@code /craft}, then enchants the shovel with Efficiency II at a nearby enchanting
  * table. With the shovel done it goes back to the Librarian for three more bottle stacks, throws
  * them until the vanilla exp bar reads level 30, and puts Efficiency V on the axe at the same
- * table. Walking uses Ryzn's native pathfinder ({@link PathfindCommand}); rotation, GUI handling,
+ * table. Walking uses Ryzn's native pathfinder ({@link WalkingNavigation}); rotation, GUI handling,
  * crafting and slot logic mirror the proven Ryzn Bea macro (self-contained).
  *
  * <p>The supply, throw and enchant states are shared by both legs; {@link #target} says which tool
@@ -306,7 +306,7 @@ public final class GoldShovelMacro extends Macro implements ConfigSection {
     if (gaze.isOwned()) {
       return true;
     } // watching the NPC mid-route; the executor keeps the body
-    if (PathfindCommand.isNavigationActive()) {
+    if (WalkingNavigation.isNavigationActive()) {
       return false;
     }
     return switch (state) {
@@ -394,7 +394,7 @@ public final class GoldShovelMacro extends Macro implements ConfigSection {
   }
 
   public void tickLook() {
-    if (!shouldLockMouse() || (PathfindCommand.isNavigationActive() && !gaze.isOwned())) {
+    if (!shouldLockMouse() || (WalkingNavigation.isNavigationActive() && !gaze.isOwned())) {
       return;
     }
     final LocalPlayer player = Minecraft.getInstance().player;
@@ -530,19 +530,19 @@ public final class GoldShovelMacro extends Macro implements ConfigSection {
     }
 
     if (mc.gui.screen() != null) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       status = "Paused while a screen is open";
       return;
     }
 
     if (worldTargets.isAtTarget(player, target)) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       setState(next);
       return;
     }
 
     if (!actionTiming.isPathRequested()) {
-      if (!PathfindCommand.startToQuiet(target.getX(), target.getY(), target.getZ())) {
+      if (!WalkingNavigation.startToQuiet(target.getX(), target.getY(), target.getZ())) {
         fail("Could not start path to " + label);
         return;
       }
@@ -551,7 +551,7 @@ public final class GoldShovelMacro extends Macro implements ConfigSection {
       return;
     }
 
-    if (!PathfindCommand.isNavigationActive() && stateTicks > 20) {
+    if (!WalkingNavigation.isNavigationActive() && stateTicks > 20) {
       // The route routinely finishes a step short of the exact block, and momentum can drift the
       // body
       // off it after the executor lets go. Only an end far from the target is a real no-path
@@ -684,7 +684,7 @@ public final class GoldShovelMacro extends Macro implements ConfigSection {
     }
     releaseAllKeys(mc.options);
     status = "Sidestepping for a clear view of " + name;
-    PathfindCommand.startToQuiet(side.getX(), side.getY(), side.getZ());
+    WalkingNavigation.startToQuiet(side.getX(), side.getY(), side.getZ());
   }
 
   // ---- keeping thrown experience away from other players ----
@@ -721,7 +721,7 @@ public final class GoldShovelMacro extends Macro implements ConfigSection {
     if (opts == null) {
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     releaseMovementAndAttack(opts);
   }
 
@@ -828,7 +828,7 @@ public final class GoldShovelMacro extends Macro implements ConfigSection {
   private void stopAll(String reason, boolean completed) {
     final Minecraft mc = Minecraft.getInstance();
     releaseAllKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     if (mc.gui.screen() != null
         && screens.shouldClose(mc, experience.supplySession, craftSession, enchantSession)) {
       closeCurrentScreen(mc);

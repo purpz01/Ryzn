@@ -5,7 +5,7 @@ import lombok.Getter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.feature.pathfinder.path.WalkCheck;
 import ryzn.macro.client.util.world.MacroWorld;
 import ryzn.swift.nativepath.NativeStateEncoder;
@@ -109,11 +109,11 @@ final class CombatNav {
         slot != destSlot
             || plannedPos == null
             || plannedPos.distSqr(dest) >= (long) moveThreshold * moveThreshold
-            || !PathfindCommand.isNavigationActive();
+            || !WalkingNavigation.isNavigationActive();
     if (!stale || repathCooldown > 0) {
       return;
     }
-    if (PathfindCommand.startToHotSwap(dest.getX(), dest.getY(), dest.getZ())) {
+    if (WalkingNavigation.startToHotSwap(dest.getX(), dest.getY(), dest.getZ())) {
       owned = true;
       slot = destSlot;
       plannedPos = dest;
@@ -141,7 +141,7 @@ final class CombatNav {
     if (!owned) {
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     owned = false;
   }
 

@@ -30,3 +30,5 @@ bundled models and license are under `assets/ryzn/abcurves`. The reference fixtu
 synthetic target schedules and can be regenerated with `tools/generate_abcurves_reference.py`.
 The bundled ONNX Runtime supports Windows x86-64, Linux x86-64 and ARM64, and macOS ARM64.
 Ryzn uses Direct rotation if the planner cannot load on the current platform.
+
+See the [source and API master index](docs/INDEX.md) for development and integration guidance.

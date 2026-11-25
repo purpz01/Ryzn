@@ -158,7 +158,7 @@ public interface RotationManager {
   /**
    * Drives the standard aim profile with a speed scale and optional held yaw.
    *
-   * @description Preserves the speed and pitch-only modes used by Torrhus.
+   * @description Applies the supplied speed and pitch-only settings to the turn.
    * @param owner the feature controlling look
    * @param player the local player to turn
    * @param yaw requested yaw in degrees

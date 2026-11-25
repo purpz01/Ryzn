@@ -2,7 +2,7 @@ package ryzn.macro.client.feature.macros.impl.tree;
 
 import lombok.AccessLevel;
 import lombok.Getter;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 
 final class TreeNavigationController {
 
@@ -17,7 +17,7 @@ final class TreeNavigationController {
   private boolean drove;
 
   boolean start(int x, int y, int z) {
-    issued = PathfindCommand.startToQuiet(x, y, z);
+    issued = WalkingNavigation.startToQuiet(x, y, z);
     drove = false;
     settleTicks = 0;
     return issued;
@@ -27,12 +27,12 @@ final class TreeNavigationController {
     if (!issued) {
       return true;
     }
-    if (PathfindCommand.isNavigationActive()) {
+    if (WalkingNavigation.isNavigationActive()) {
       // isNavigationActive is true while the search is still IN FLIGHT, so it cannot tell a
       // resolved
       // route from a pending one. Only isRouteDriving proves a path came back. Same distinction the
       // Level 7 transfer routes had to make.
-      if (PathfindCommand.isRouteDriving()) {
+      if (WalkingNavigation.isRouteDriving()) {
         drove = true;
       }
       settleTicks = 0;
@@ -54,7 +54,7 @@ final class TreeNavigationController {
   }
 
   void stop() {
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     reset();
   }
 

@@ -14,8 +14,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import ryzn.macro.client.core.RyznBootstrap;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.impl.goldshovel.GoldShovelMacro.State;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 import ryzn.macro.client.input.GuiActionTiming;
 import ryzn.macro.client.util.inventory.MacroSlots;
 import ryzn.macro.client.util.text.RyznChat;
@@ -437,7 +437,7 @@ final class GoldShovelExperience {
   }
 
   void beginEvade(Minecraft mc, LocalPlayer player) {
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     if (++evasions > MAX_EVASIONS) {
       RyznChat.send("§bGold Shovel§7: a player keeps following; swapping lobbies.");
       hunt.setState(State.HOP_SEND_IS);
@@ -464,12 +464,12 @@ final class GoldShovelExperience {
     releaseAllKeys(mc.options);
     hunt.look().clear();
     if (mc.gui.screen() != null) {
-      PathfindCommand.stopNavQuiet();
+      WalkingNavigation.stopNavQuiet();
       hunt.closeCurrentScreen(mc);
       return;
     }
     if (!hunt.actionTiming.isPathRequested()) {
-      if (!PathfindCommand.startToQuiet(
+      if (!WalkingNavigation.startToQuiet(
           evadeTarget.getX(), evadeTarget.getY(), evadeTarget.getZ())) {
         // No route to that spot: rule it out and pick another without counting it as a move.
         crowdGuard.reject(evadeTarget);
@@ -483,11 +483,11 @@ final class GoldShovelExperience {
     final boolean arrived =
         player.distanceToSqr(evadeTarget.getX() + 0.5, evadeTarget.getY(), evadeTarget.getZ() + 0.5)
             <= EVADE_ARRIVAL_DIST_SQ;
-    final boolean stopped = !PathfindCommand.isNavigationActive() && hunt.stateTicks > 20;
+    final boolean stopped = !WalkingNavigation.isNavigationActive() && hunt.stateTicks > 20;
     if (!arrived && !stopped && hunt.stateTicks <= EVADE_TIMEOUT_TICKS) {
       return;
     }
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     if (crowdGuard.intruder(mc, level, player) != null) {
       beginEvade(mc, player); // they followed: that is another move
       return;
@@ -513,7 +513,7 @@ final class GoldShovelExperience {
 
   void tickHopSendIs(Minecraft mc) {
     releaseAllKeys(mc.options);
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     hunt.look().clear();
     if (mc.gui.screen() != null) {
       hunt.closeCurrentScreen(mc);

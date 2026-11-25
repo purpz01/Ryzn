@@ -5,9 +5,7 @@ import com.mojang.logging.LogUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicInteger;
-import lombok.Getter;
+import java.util.concurrent.FutureTask;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
@@ -19,13 +17,7 @@ import ryzn.swift.nativepath.NativePathfinderBridge;
 import ryzn.swift.nativepath.NativePathfinderBridge.NativePathSearchRequest;
 import ryzn.swift.nativepath.NativeVoxelFlags;
 
-/**
- * for "compute me a route": kick off a search on a worker thread, expose the latest result via
- * getters. This class does NOT walk the bot; that's the executor's job (see PathExecutor).
- *
- * <p>Trimmed from the upstream: Hypixel area detection (the ryzn project dropped Hypixel-specific
- * integrations), and CT TabList helpers.
- */
+/** Runs native path searches and publishes the latest result for walking navigation. */
 public final class PathManager {
 
   private static final Logger logger = LogUtils.getLogger();
@@ -66,6 +58,7 @@ public final class PathManager {
   private record PathSnapshot(
       List<BlockPos> points,
       List<BlockPos> keyNodes,
+      int[] movementFlags,
       long timeMs,
       int nodesExplored,
       double nanosecondsPerNode) {}
@@ -106,29 +99,16 @@ public final class PathManager {
     }
   }
 
-  private static volatile PathSnapshot currentPath = null;
-  private static volatile int[] currentPathFlags = new int[0];
-  @Getter private static volatile String lastError = null;
-  private static final SearchActivity searchActivity = new SearchActivity();
+  private static final SearchState<PathSnapshot> search = new SearchState<>();
+  private static volatile boolean starting;
 
-  /**
-   * Anti-detection: the native rotates its neighbour scan order by this offset, so equal-cost ties
-   * resolve to a different (equally short) route each search. Same cost, different nodes - a grind
-   * route walked 50 times stops tracing one identical polyline for server-side analysis to latch
-   * onto.
-   */
-  private static final int WALK_MOVE_VARIANTS =
-      24; // native WALK_MOVES.length; it mods by len anyway
-
+  // The native walking search can rotate through 24 neighbor orders when breaking ties.
+  private static final int WALK_MOVE_VARIANTS = 24;
   private static final Random variantRng = new Random();
-  // Per-phase timings (ns) from the last search, for the /pathfind debug breakdown. See
-  // NativePathResult.
 
   private static final Object avoidLock = new Object();
   private static final List<ManagedAvoidEntry> transientAvoidEntries = new ArrayList<>(8);
 
-  private static volatile Future<?> currentTask = null;
-  private static final AtomicInteger searchId = new AtomicInteger(0);
   private static final Object nativeSearchLock = new Object();
 
   private PathManager() {}
@@ -143,49 +123,48 @@ public final class PathManager {
         new int[][] {{startX, startY, startZ}}, new int[][] {{endX, endY, endZ}}, maxIterations);
   }
 
-  private static boolean findPathInternal(
+  private static synchronized boolean findPathInternal(
       int[][] startPoints, int[][] endPoints, int maxIterations) {
-    searchActivity.beginStart();
+    starting = true;
     try {
-      return startPath(startPoints, endPoints, maxIterations);
+      return startSearch(startPoints, endPoints, maxIterations);
     } finally {
-      searchActivity.endStart();
+      starting = false;
     }
   }
 
-  private static boolean startPath(int[][] startPoints, int[][] endPoints, int maxIterations) {
+  private static boolean startSearch(int[][] startPoints, int[][] endPoints, int maxIterations) {
     cancelActiveSearch();
 
-    lastError = null;
-    currentPath = null;
-    currentPathFlags = new int[0];
+    final long generation = search.generation();
+    search.finish(generation, null, null);
 
     if (maxIterations <= 0) {
-      lastError = "maxIterations must be > 0";
+      search.finish(generation, null, "maxIterations must be > 0");
       return false;
     }
 
     final String startValidation = validatePoints("Start points", startPoints);
     if (startValidation != null) {
-      lastError = startValidation;
+      search.finish(generation, null, startValidation);
       return false;
     }
 
     final String endValidation = validatePoints("End points", endPoints);
     if (endValidation != null) {
-      lastError = endValidation;
+      search.finish(generation, null, endValidation);
       return false;
     }
 
     final String nativeValidation = validateNativeAvailability();
     if (nativeValidation != null) {
-      lastError = nativeValidation;
+      search.finish(generation, null, nativeValidation);
       return false;
     }
 
     final String heightValidation = validateHeights(startPoints, endPoints);
     if (heightValidation != null) {
-      lastError = heightValidation;
+      search.finish(generation, null, heightValidation);
       return false;
     }
 
@@ -193,84 +172,69 @@ public final class PathManager {
     final int[] avoidMeta = encodeAvoidMeta(avoidZones);
     final double[] avoidPenalty = encodeAvoidPenalty(avoidZones);
 
-    final int currentId = searchId.incrementAndGet();
-    searchActivity.markRunning();
-    NativePathfinderBridge.cancelSearch();
+    final NativePathSearchRequest request =
+        new NativePathSearchRequest(
+            flattenPoints(startPoints),
+            flattenPoints(endPoints),
+            maxIterations,
+            heuristicWeight(),
+            nextVariantOffset(),
+            avoidMeta,
+            avoidPenalty);
 
-    final int[] startFlat = flattenPoints(startPoints);
-    final int[] endFlat = flattenPoints(endPoints);
-
+    // Publish the task before execute: the executor may run it inline under saturation.
+    final FutureTask<Void> task =
+        new FutureTask<>(
+            () -> {
+              runSearch(generation, request);
+              return null;
+            });
+    search.start(task);
     try {
-      currentTask =
-          Swift.executor.submit(
-              () -> {
-                try {
-                  final NativePathResult result;
-                  synchronized (nativeSearchLock) {
-                    result =
-                        NativePathfinderBridge.findPath(
-                            new NativePathSearchRequest(
-                                startFlat,
-                                endFlat,
-                                maxIterations,
-                                heuristicWeight(),
-                                nextVariantOffset(),
-                                avoidMeta,
-                                avoidPenalty));
-                  }
-
-                  if (searchId.get() != currentId) {
-                    return;
-                  }
-
-                  if (result != null && result.path().length > 0) {
-                    final List<BlockPos> points = toBlockPosList(result.path());
-                    final List<BlockPos> keyNodes =
-                        toBlockPosList(
-                            result.keyPath().length > 0 ? result.keyPath() : result.path());
-
-                    currentPath =
-                        new PathSnapshot(
-                            points,
-                            keyNodes,
-                            result.timeMs(),
-                            result.nodesExplored(),
-                            result.nanosecondsPerNode());
-                    currentPathFlags = movementFlags(points, result.pathFlags());
-
-                    lastError = null;
-                  } else {
-                    currentPath = null;
-                    currentPathFlags = new int[0];
-                    final String err = NativePathfinderBridge.getLastError();
-                    lastError = err != null ? err : "Pathfinder found no path";
-                  }
-                } catch (Exception e) {
-                  if (searchId.get() == currentId) {
-                    lastError =
-                        e.getMessage() != null
-                            ? e.getMessage()
-                            : "Pathfinder failed for an unknown reason";
-                    logger.error("[ryzn] native pathfinding failed", e);
-                  }
-                } finally {
-                  if (searchId.get() == currentId) {
-                    searchActivity.finishRunning();
-                    currentTask = null;
-                  }
-                }
-              });
-    } catch (Exception e) {
-      if (searchId.get() == currentId) {
-        searchActivity.finishRunning();
-        lastError = e.getMessage() != null ? e.getMessage() : "Pathfinder could not start a search";
-      }
+      Swift.executor.execute(task);
+      return true;
+    } catch (RuntimeException e) {
+      search.finish(
+          generation, null, e.getMessage() != null ? e.getMessage() : "Pathfinder could not start");
       return false;
     }
-    return true;
   }
 
-  record DetachedAttempt<T>(T result, boolean retryable) {}
+  private static void runSearch(long generation, NativePathSearchRequest request) {
+    PathSnapshot snapshot = null;
+    String error = null;
+    try {
+      final NativePathResult result;
+      synchronized (nativeSearchLock) {
+        if (generation != search.generation()) {
+          return;
+        }
+        result = NativePathfinderBridge.findPath(request);
+        if (result == null || result.path().length == 0) {
+          error = NativePathfinderBridge.getLastError();
+          if (error == null) {
+            error = "Pathfinder found no path";
+          }
+        }
+      }
+      if (error == null && generation == search.generation()) {
+        final List<BlockPos> points = toBlockPosList(result.path());
+        snapshot =
+            new PathSnapshot(
+                points,
+                toBlockPosList(result.keyPath().length > 0 ? result.keyPath() : result.path()),
+                movementFlags(points, result.pathFlags()),
+                result.timeMs(),
+                result.nodesExplored(),
+                result.nanosecondsPerNode());
+      }
+    } catch (Exception e) {
+      error = e.getMessage() != null ? e.getMessage() : "Pathfinder failed for an unknown reason";
+      logger.error("[ryzn] native pathfinding failed", e);
+    } finally {
+      search.finish(generation, snapshot, error);
+    }
+  }
 
   private static int[] movementFlags(List<BlockPos> points, int[] nativeFlags) {
     final int[] flags = java.util.Arrays.copyOf(nativeFlags, points.size());
@@ -410,69 +374,34 @@ public final class PathManager {
   }
 
   public static boolean isSearching() {
-    return searchActivity.isBusy();
+    return starting || search.isSearching();
   }
 
-  public static void cancelSearch() {
-    searchActivity.cancelAll();
+  public static synchronized void cancelSearch() {
     cancelActiveSearch();
   }
 
   private static void cancelActiveSearch() {
-    final Future<?> t = currentTask;
-    if (t != null) {
-      t.cancel(true);
+    final FutureTask<Void> task = search.invalidate();
+    if (task != null) {
+      task.cancel(true);
+      Swift.executor.remove(task);
     }
-    currentTask = null;
-    searchId.incrementAndGet();
-    searchActivity.finishRunning();
     NativePathfinderBridge.cancelSearch();
   }
 
-  static final class SearchActivity {
-    private final AtomicInteger starts = new AtomicInteger();
-    private volatile boolean running;
+  /** Floor-block coordinates and associated movement flags from one completed search. */
+  public record RouteData(int[] dense, int[] keyNodes, int[] movementFlags) {}
 
-    void beginStart() {
-      starts.incrementAndGet();
-    }
-
-    void endStart() {
-      starts.updateAndGet(value -> Math.max(0, value - 1));
-    }
-
-    void markRunning() {
-      running = true;
-    }
-
-    void finishRunning() {
-      running = false;
-    }
-
-    void cancelAll() {
-      starts.set(0);
-      running = false;
-    }
-
-    boolean isBusy() {
-      return starts.get() > 0 || running;
-    }
-  }
-
-  public static int[] getPathArray() {
-    final PathSnapshot snapshot = currentPath;
+  public static RouteData getRouteData() {
+    final PathSnapshot snapshot = search.outcome().result();
     if (snapshot == null) {
-      return new int[0];
+      return new RouteData(new int[0], new int[0], new int[0]);
     }
-    return packPoints(snapshot.points(), -1);
-  }
-
-  public static int[] getKeyNodesArray() {
-    final PathSnapshot snapshot = currentPath;
-    if (snapshot == null) {
-      return new int[0];
-    }
-    return packPoints(snapshot.keyNodes(), -1);
+    return new RouteData(
+        packPoints(snapshot.points(), -1),
+        packPoints(snapshot.keyNodes(), -1),
+        snapshot.movementFlags().clone());
   }
 
   private static int[] packPoints(List<BlockPos> points, int offsetY) {
@@ -484,10 +413,6 @@ public final class PathManager {
       result[idx++] = p.getZ();
     }
     return result;
-  }
-
-  public static int[] getPathFlagsArray() {
-    return currentPathFlags;
   }
 
   public static void addTransientAvoidPoint(int x, int y, int z) {
@@ -519,22 +444,22 @@ public final class PathManager {
   }
 
   public static int getPathSize() {
-    final PathSnapshot s = currentPath;
+    final PathSnapshot s = search.outcome().result();
     return s != null ? s.points().size() : 0;
   }
 
   public static long getLastTimeMs() {
-    final PathSnapshot s = currentPath;
+    final PathSnapshot s = search.outcome().result();
     return s != null ? s.timeMs() : -1L;
   }
 
   public static int getNodesExplored() {
-    final PathSnapshot s = currentPath;
+    final PathSnapshot s = search.outcome().result();
     return s != null ? s.nodesExplored() : 0;
   }
 
   public static double getNanosecondsPerNode() {
-    final PathSnapshot s = currentPath;
+    final PathSnapshot s = search.outcome().result();
     return s != null ? s.nanosecondsPerNode() : 0.0;
   }
 
@@ -550,14 +475,16 @@ public final class PathManager {
     return variantRng.nextInt(WALK_MOVE_VARIANTS);
   }
 
-  public static boolean hasPath() {
-    return currentPath != null;
+  public static String getLastError() {
+    return search.outcome().error();
   }
 
-  public static void clear() {
-    cancelSearch();
-    currentPath = null;
-    currentPathFlags = new int[0];
-    lastError = null;
+  public static boolean hasPath() {
+    return search.outcome().result() != null;
+  }
+
+  public static synchronized void clear() {
+    cancelActiveSearch();
+    search.finish(search.generation(), null, null);
   }
 }

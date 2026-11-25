@@ -12,7 +12,6 @@ import ryzn.macro.client.core.events.api.MiningMerchantActionEvent;
 import ryzn.macro.client.core.events.api.RevLevel2ActionEvent;
 import ryzn.macro.client.core.events.api.SandMinerActionEvent;
 import ryzn.macro.client.core.events.api.WheatBreakerActionEvent;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.impl.bea.BeaMacro;
 import ryzn.macro.client.feature.macros.impl.carpentry.CarpentryUnlockMacro;
 import ryzn.macro.client.feature.macros.impl.foragingquest.ForagingQuestUnlockerMacro;
@@ -22,6 +21,7 @@ import ryzn.macro.client.feature.macros.impl.level7.AutoLvl7Macro.State;
 import ryzn.macro.client.feature.macros.impl.miningmerchant.MiningMerchantMacro;
 import ryzn.macro.client.feature.macros.impl.sand.SandMinerMacro;
 import ryzn.macro.client.feature.macros.impl.wheat.WheatBreakerMacro;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 
 /**
  * @description Runs Level 7 child sessions, skill gates, completion checks and restart limits.
@@ -437,7 +437,7 @@ final class Level7Children {
         .post(
             new ForagingQuestActionEvent(
                 ForagingQuestActionEvent.Action.SET_CLEAR_INVENTORY_AT_MERCHANT, false));
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
   }
 
   String activeChildStatus() {
@@ -456,7 +456,7 @@ final class Level7Children {
           RyznBootstrap.macroManager().getByClass(RevLevel2Macro.class).statusText();
       case WHEAT_BREAKER ->
           RyznBootstrap.macroManager().getByClass(WheatBreakerMacro.class).statusText();
-      case PATHFINDER -> PathfindCommand.isNavigationActive() ? "Pathfinding" : "Pathfinder idle";
+      case PATHFINDER -> WalkingNavigation.isNavigationActive() ? "Pathfinding" : "Pathfinder idle";
       default -> "-";
     };
   }

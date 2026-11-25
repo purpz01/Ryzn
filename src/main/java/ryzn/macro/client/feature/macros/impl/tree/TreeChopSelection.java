@@ -9,8 +9,8 @@ import net.minecraft.client.Options;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
-import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.impl.tree.TreeChopMacro.State;
+import ryzn.macro.client.feature.pathfinder.WalkingNavigation;
 
 /**
  * @description Selects live route trunks and hands completed trees to the next existing route
@@ -280,7 +280,7 @@ final class TreeChopSelection {
 
   void finishTreeWithoutPickup(
       Minecraft mc, LocalPlayer player, Level level, Options opts, String nextActivity) {
-    PathfindCommand.stopNavQuiet();
+    WalkingNavigation.stopNavQuiet();
     treeChop.navigation.reset();
     releaseMovementKeys(opts);
     treeChop.releaseChop(opts);
