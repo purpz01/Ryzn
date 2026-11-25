@@ -1,0 +1,38 @@
+{
+  "required": true,
+  "package": "ryzn.macro.client.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "accessor.HarpScreenAccessor",
+    "accessor.KeyMappingAccessor",
+    "accessor.RenderTypeAccessor",
+    "accessor.RyznEditBoxAccessor",
+    "accessor.ScreenAccessor",
+    "client.MinecraftClientMixin",
+    "client.FramerateLimitTrackerMixin",
+    "input.KeyboardInputMixin",
+    "input.MouseHandlerMixin",
+    "entity.ClientPlayerMixin",
+    "accessor.LocalPlayerServerStateAccessor",
+    "accessor.ChatComponentAccessor",
+    "accessor.SlotAccessor",
+    "world.LevelChunkMixin",
+    "world.MultiPlayerGameModeMixin",
+    "accessor.MultiPlayerGameModeAccessor",
+    "network.ClientPacketListenerMixin",
+    "network.ClientConnectionMixin",
+    "accessor.OptionsKeysAccessor",
+    "accessor.RyznCommandSourceMixin",
+    "client.RuntimeMinecraftMixin",
+    "network.RuntimeClientPacketListenerMixin",
+    "hud.RuntimeChatListenerMixin",
+    "hud.RyznStatusHudMixin",
+    "render.RuntimeLevelRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}

@@ -1,0 +1,61 @@
+# gradle
+
+.gradle/
+build/
+out/
+classes/
+
+# eclipse
+
+*.launch
+
+# idea
+
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# vscode
+
+.settings/
+.vscode/
+bin/
+.classpath
+.project
+
+# macos
+
+*.DS_Store
+
+# fabric
+
+run/
+# Runtime game logs: regenerated every launch, nothing reads them from the repo.
+logs/
+ryzn/telemetry/
+build-bedrock.log
+polinex-scripts/
+
+# java
+
+hs_err_*.log
+replay_*.log
+*.hprof
+*.jfr
+.jdks/
+.superpowers/
+
+# Vanilla block textures extracted from the user's own client jar by tools/autobuild-editor/make-textures.ps1.
+# Mojang's assets, so they stay out of the repo; run that script to regenerate. The editor falls back to flat
+# colours when the file is absent, so a fresh clone still works.
+tools/autobuild-editor/textures.js
+
+# python bytecode from tools/
+__pycache__/
+
+# JCEF writes this next to the game directory
+debug.log
+
+# Local implementation plans
+/docs/superpowers/

@@ -1,0 +1,68 @@
+PROPRIETARY SOFTWARE LICENSE
+
+Copyright (c) 2026 Purpz01. All Rights Reserved.
+
+================================================================================
+NOTICE: THIS IS NOT OPEN SOURCE SOFTWARE.
+================================================================================
+
+This software and all associated source code, files, assets, documentation, and
+materials in this repository (collectively, the "Software") are the exclusive
+property of Purpz01 (the "Owner") and are protected by copyright and other
+intellectual property laws.
+
+ALL RIGHTS ARE RESERVED.
+
+This proprietary license applies only to original Ryzn material that is
+not subject to a separate license. It does not restrict rights granted by
+the GNU General Public License for V5PathJNI or by other third-party
+licenses. See NativeSrc/NOTICE.md and NativeSrc/LICENSE for V5PathJNI.
+
+1. NO LICENSE GRANTED BY DEFAULT
+   No license, right, or permission of any kind is granted to any person or
+   entity by the mere possession of, access to, or receipt of the Software.
+   The fact that this repository or any copy of the Software may have come into
+   your possession - by any means, authorized or not - does NOT grant you any
+   right to use it.
+
+2. PROHIBITED WITHOUT PRIOR WRITTEN PERMISSION
+   You may NOT, in whole or in part, do any of the following without the prior,
+   explicit, written confirmation of the Owner:
+     (a) use, run, or execute the Software;
+     (b) copy, reproduce, or store the Software;
+     (c) modify, adapt, translate, or create derivative works of the Software;
+     (d) distribute, publish, sublicense, sell, rent, lease, or transfer the
+         Software;
+     (e) display or perform the Software publicly;
+     (f) reverse engineer, decompile, or disassemble the Software except to the
+         limited extent such restriction is prohibited by applicable law;
+     (g) remove, obscure, or alter this notice or any proprietary markings.
+
+3. PERMISSION MUST BE EXPLICIT
+   Any grant of rights must be made by the Owner in writing and must
+   specifically identify the rights granted, the party receiving them, and any
+   conditions. Silence, inaction, or the continued availability of this
+   repository does NOT constitute permission. Permission may be withdrawn by the
+   Owner at any time.
+
+4. UNAUTHORIZED ACCESS AND USE
+   Any access to, possession of, or use of the Software that is not expressly
+   authorized in writing by the Owner is unauthorized and unlawful. Unauthorized
+   use will be treated as infringement of the Owner's intellectual property
+   rights and may result in civil and/or criminal liability to the fullest
+   extent permitted by law.
+
+5. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+6. LIMITATION OF LIABILITY
+   IN NO EVENT SHALL THE OWNER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+   OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+To request permission to use this Software, contact the Owner directly. No use
+is authorized until you have received explicit written confirmation from the
+Owner.

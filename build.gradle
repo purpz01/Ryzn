@@ -1,0 +1,220 @@
+plugins {
+	// MC 26.1+ ships unobfuscated with official Mojang names; the non-remap loom plugin is the
+	// correct one (intermediary/remapping no longer exist for these versions).
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'com.gradleup.shadow' version '9.2.2'
+	id 'com.diffplug.spotless' version '8.1.0'
+}
+
+spotless {
+	lineEndings = com.diffplug.spotless.LineEnding.UNIX
+	java {
+		target 'src/**/*.java'
+
+		googleJavaFormat('1.34.0')
+	}
+}
+
+tasks.named('check') {
+	dependsOn tasks.named('spotlessCheck')
+}
+
+tasks.withType(Javadoc).configureEach {
+	options.addStringOption('tag', 'description:a:Description')
+}
+
+tasks.register('refactorJavadoc', Javadoc) {
+	source = fileTree('src/main/java') {
+		include 'ryzn/macro/client/core/events/**/*.java'
+		include 'ryzn/macro/client/feature/commands/api/**/*.java'
+		include 'ryzn/macro/client/feature/commands/impl/**/*.java'
+		include 'ryzn/macro/client/feature/api/**/*.java'
+		include 'ryzn/macro/client/feature/modules/api/**/*.java'
+		include 'ryzn/macro/client/feature/modules/impl/**/*.java'
+		include 'ryzn/macro/client/feature/macros/api/**/*.java'
+		include 'ryzn/macro/client/feature/macros/impl/**/*.java'
+		include 'ryzn/macro/client/feature/rotation/api/**/*.java'
+		include 'ryzn/macro/client/feature/rotation/impl/**/*.java'
+		include 'ryzn/macro/client/feature/hud/api/**/*.java'
+		include 'ryzn/macro/client/feature/failsafe/api/**/*.java'
+	}
+	classpath = sourceSets.main.compileClasspath + sourceSets.main.output
+	destinationDir = layout.buildDirectory.dir('docs/refactor-api').get().asFile
+	// Report every doclint warning instead of stopping at javadoc's default of 100.
+	options.addStringOption('Xmaxwarns', '100000')
+}
+
+version = project.mod_version
+group = project.maven_group
+
+repositories {
+	// Maven Central - Skija (io.github.humbleui) lives here.
+	mavenCentral()
+	// Hypixel's own mod API: the authoritative "which server am I on" feed.
+	maven { url = 'https://repo.hypixel.net/repository/Hypixel/' }
+	// Modrinth - the Fabric bridge mod for the above, nested into our jar (see `include` below).
+	exclusiveContent {
+		forRepository { maven { url = 'https://api.modrinth.com/maven' } }
+		filter { includeGroup 'maven.modrinth' }
+	}
+}
+
+configurations {
+	skijaRuntime
+	skijaNatives { transitive = false }
+
+	// Real Fabric mods to nest as jar-in-jar. NOT loom's `include`: that nests into the `jar` task, which
+	// here is the unrunnable -slim artifact, and it also writes its own `jars` entry - which then collides
+	// with ours ("Cannot nest 2 jars at the same path"). Nesting into shadowJar ourselves keeps the file
+	// and the fabric.mod.json declaration in one place, both driven off gradle.properties.
+	nestedMods
+	abcurvesRuntime
+	implementation.extendsFrom(abcurvesRuntime)
+}
+
+loom {
+	accessWidenerPath = file('src/main/resources/ryzn.accesswidener')
+
+	mods {
+		"ryzn" {
+			sourceSet sourceSets.main
+		}
+	}
+
+}
+
+dependencies {
+	abcurvesRuntime 'com.microsoft.onnxruntime:onnxruntime:1.27.0'
+	compileOnly "io.github.humbleui:skija-shared:${project.skija_version}"
+	skijaRuntime "io.github.humbleui:skija-shared:${project.skija_version}"
+	['windows-x64', 'linux-x64', 'linux-arm64', 'macos-x64', 'macos-arm64'].each { platform ->
+		skijaNatives "io.github.humbleui:skija-${platform}:${project.skija_version}"
+	}
+	// To change the versions see the gradle.properties file
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	// No `mappings` line: 26.1+ uses Mojang's official names at runtime, so the code is already
+	// in official Mojang mappings and nothing is remapped.
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+
+
+	// Hypixel Mod API. Two artifacts, on purpose:
+	//  - the plain library, to compile against. NOT in shadowBundle: the bridge mod below ships its own
+	//    copy and is the only thing that can actually move bytes on the channel, so a second merged copy
+	//    would just shadow theirs.
+	//  - the Fabric bridge mod, jar-in-jar'd so it installs itself. Without this it is a manual download
+	//    the user has to remember on every fresh instance, and forgetting it is a hard launch failure.
+	implementation "net.hypixel:mod-api:${project.hypixel_modapi_version}"
+	nestedMods "maven.modrinth:hypixel-mod-api:${project.hypixel_modapi_fabric_version}"
+	localRuntime "maven.modrinth:hypixel-mod-api:${project.hypixel_modapi_fabric_version}"
+	// The bridge requires Fabric API even though Ryzn uses vanilla hooks directly.
+	localRuntime "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	testImplementation "org.junit.jupiter:junit-jupiter:5.10.3"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+	compileOnly "org.projectlombok:lombok:1.18.42"
+	annotationProcessor "org.projectlombok:lombok:1.18.42"
+	testCompileOnly "org.projectlombok:lombok:1.18.42"
+	testAnnotationProcessor "org.projectlombok:lombok:1.18.42"
+
+}
+
+def skijaDirectory = "skija/${project.skija_version}"
+def stageSkija = tasks.register('stageSkija', Sync) {
+	from(configurations.skijaRuntime, configurations.skijaNatives)
+	into(layout.buildDirectory.dir(skijaDirectory))
+}
+tasks.named('assemble') { dependsOn(stageSkija) }
+def stageDevSkija = tasks.register('stageDevSkija', Copy) {
+	from(stageSkija)
+	into(layout.projectDirectory.dir("run/${skijaDirectory}"))
+}
+tasks.named('runClient') { dependsOn(stageDevSkija) }
+
+processResources {
+	from('NativeSrc') {
+		include 'CMakeLists.txt', 'LICENSE', 'NOTICE.md', 'src/**'
+		into 'META-INF/v5pathjni-source'
+	}
+	from('NativeSrc/LICENSE') {
+		into 'META-INF/licenses'
+		rename { 'V5PathJNI-GPL-3.0.txt' }
+	}
+	def version = project.version
+	// Loom writes its jar-in-jar `jars` entry into the `jar` task output only, which here is the
+	// unrunnable -slim artifact - so the shipped jar carried the nested mod with nothing declaring it and
+	// Fabric ignored it ("requires hypixel-mod-api, which is missing"). We declare it ourselves instead,
+	// off the same property that picks the artifact, so the name cannot drift. shadowJar verifies it.
+	def bridgeJar = "hypixel-mod-api-${project.hypixel_modapi_fabric_version}.jar"
+	inputs.property "version", version
+	inputs.property "bridgeJar", bridgeJar
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version, "bridgeJar": bridgeJar
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+	// Sources are UTF-8. Without this javac reads them in the platform charset (windows-1252 here),
+	// which silently mangles every non-ASCII literal - the SkyBlock glyph switch matched nothing.
+	it.options.encoding = 'UTF-8'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+
+java {
+	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
+	// if it is present.
+	// If you remove this line, sources will not be generated.
+	withSourcesJar()
+
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+// On 26.1+ the shadow jar is the final Fabric mod.
+jar {
+	archiveClassifier = 'slim'
+}
+
+shadowJar {
+	configurations = [project.configurations.abcurvesRuntime]
+	exclude '**/*.dSYM/**'
+	archiveClassifier = ''
+	archiveFileName = 'ryzn.jar'
+	from('LICENSE')
+
+	// Jar-in-jar, done by hand. The filename must match the `jars` entry processResources writes into
+	// fabric.mod.json; both come from hypixel_modapi_fabric_version, and the check below proves it.
+	// `project.` is required: inside shadowJar, `configurations` is shadow's own SetProperty.
+	from(project.configurations.nestedMods) {
+		into 'META-INF/jars'
+	}
+
+	// Both halves of jar-in-jar fail silently and identically: a nested jar nobody declares, or a
+	// declaration pointing at a nested jar that is not there. Both only surface as Fabric refusing to
+	// launch. Fail the build here instead.
+	doLast {
+		def jarFile = new java.util.zip.ZipFile(archiveFile.get().asFile)
+		try {
+			def manifest = jarFile.getEntry('fabric.mod.json')
+			assert manifest != null: "shipped jar has no fabric.mod.json"
+			def declared = (jarFile.getInputStream(manifest).text =~ /"file"\s*:\s*"([^"]+)"/)
+					.collect { it[1] }
+			assert !declared.isEmpty(): "fabric.mod.json declares no nested jars - did the `jars` entry survive processResources?"
+			declared.each { nested ->
+				assert jarFile.getEntry(nested) != null:
+						"fabric.mod.json declares ${nested} but it is not in the jar"
+			}
+			logger.lifecycle("jar-in-jar OK: ${declared.join(', ')}")
+
+		} finally {
+			jarFile.close()
+		}
+	}
+}
+
+tasks.assemble.dependsOn tasks.shadowJar
