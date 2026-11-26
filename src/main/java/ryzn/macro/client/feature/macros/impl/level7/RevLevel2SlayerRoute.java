@@ -14,9 +14,11 @@ import net.minecraft.world.inventory.Slot;
 import ryzn.macro.client.MacroInput;
 import ryzn.macro.client.feature.commands.impl.pathfinder.PathfindCommand;
 import ryzn.macro.client.feature.macros.impl.level7.RevLevel2Macro.State;
+import ryzn.macro.client.feature.rotation.impl.MacroAim;
 import ryzn.macro.client.input.GuiActionTiming;
 import ryzn.macro.client.util.gui.MacroScreens;
 import ryzn.macro.client.util.inventory.MacroSlots;
+import ryzn.macro.client.util.world.MacroObstruction;
 
 /**
  * @description Runs the Maddox menus, Slayer loop, death return and level reward claims.
@@ -48,14 +50,42 @@ final class RevLevel2SlayerRoute {
   boolean levelRewardsPending;
 
   void tickPathToMaddox(Minecraft mc, LocalPlayer player, State next) {
+    tickMaddoxApproach(mc, player, next, false);
+  }
+
+  void tickCombatPathToMaddox(Minecraft mc, LocalPlayer player, State next) {
+    tickMaddoxApproach(mc, player, next, true);
+  }
+
+  private void tickMaddoxApproach(
+      Minecraft mc, LocalPlayer player, State next, boolean combatReturn) {
     hunt.look().clear();
-    if (RevLevel2Macro.isWithinMaddoxArrival(player.getX(), player.getY(), player.getZ())) {
+    boolean nearMaddox = hunt.merchants.nearPosition(player, MADDOX_POSITION);
+    var maddox = hunt.merchants.findMerchant(mc.level, "Maddox", MADDOX_POSITION);
+    boolean canInteract =
+        maddox != null && RevLevel2Merchants.canInteract(mc.level, player, maddox);
+    if (RevLevel2Macro.isWithinMaddoxArrival(
+        player.getX(), player.getY(), player.getZ(), maddox != null, canInteract)) {
+      if (combatReturn && hunt.combat.isActive()) hunt.combat.stop();
       PathfindCommand.stopNavQuiet();
       hunt.setState(next, "At Maddox");
       return;
     }
+    if (combatReturn && !nearMaddox) {
+      if (!hunt.combat.isActive() && !hunt.combat.startMaddoxReturn(player, MADDOX_POSITION)) {
+        hunt.fail(hunt.combat.statusText());
+        return;
+      }
+      if (hunt.combat.tick(mc) == RevLevel2SlayerCombat.Result.FAILED) {
+        hunt.fail(hunt.combat.statusText());
+      } else {
+        hunt.status = hunt.combat.statusText();
+      }
+      return;
+    }
+    if (combatReturn && hunt.combat.isActive()) hunt.combat.stop();
     if (PathfindCommand.isNavigationActive()) {
-      hunt.status = "Walking to -83 67 -132";
+      hunt.status = "Walking to Maddox";
       return;
     }
     if (hunt.pathRetryTicks > 0) {
@@ -63,40 +93,22 @@ final class RevLevel2SlayerRoute {
       return;
     }
     if (++hunt.pathAttempts > MAX_PATH_ATTEMPTS) {
-      hunt.fail("could not pathfind to Maddox");
+      hunt.fail(
+          nearMaddox ? "could not get within reach of Maddox" : "could not pathfind to Maddox");
       return;
     }
     hunt.pathRetryTicks = PATH_RETRY_TICKS;
-    if (PathfindCommand.startToQuiet(
-        MADDOX_POSITION.getX(), MADDOX_POSITION.getY(), MADDOX_POSITION.getZ())) {
+    BlockPos goal = MADDOX_POSITION;
+    if (nearMaddox && maddox != null) {
+      var closer =
+          MacroObstruction.findSidestep(
+              mc.level, player, maddox.blockPosition(), MacroAim.entityLookPoint(maddox), maddox);
+      if (closer != null) goal = closer;
+    }
+    if (PathfindCommand.startToQuiet(goal.getX(), goal.getY(), goal.getZ())) {
       hunt.status = "Pathfinding to Maddox";
     } else {
       hunt.status = "Waiting for pathfinder (" + hunt.pathAttempts + "/" + MAX_PATH_ATTEMPTS + ")";
-    }
-  }
-
-  void tickCombatPathToMaddox(Minecraft mc, LocalPlayer player, State next) {
-    hunt.look().clear();
-    if (RevLevel2Macro.isWithinMaddoxArrival(player.getX(), player.getY(), player.getZ())) {
-      hunt.combat.stop();
-      PathfindCommand.stopNavQuiet();
-      hunt.setState(next, "At Maddox");
-      return;
-    }
-    if (hunt.merchants.nearPosition(player, MADDOX_POSITION)) {
-      hunt.combat.stop();
-      tickPathToMaddox(mc, player, next);
-      return;
-    }
-    if (!hunt.combat.isActive() && !hunt.combat.startMaddoxReturn(player, MADDOX_POSITION)) {
-      hunt.fail(hunt.combat.statusText());
-      return;
-    }
-    final RevLevel2SlayerCombat.Result result = hunt.combat.tick(mc);
-    if (result == RevLevel2SlayerCombat.Result.FAILED) {
-      hunt.fail(hunt.combat.statusText());
-    } else {
-      hunt.status = hunt.combat.statusText();
     }
   }
 

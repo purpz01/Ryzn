@@ -128,14 +128,23 @@ final class RyznMenuStyle {
     rounded(g, x, y, w, h, bottom);
   }
 
+  static void darkGlass(GuiGraphicsExtractor g, int x, int y, int width, int height) {
+    rounded(g, x, y, width, height, RyznTheme.EDGE);
+    glass(g, x + 1, y + 1, width - 2, height - 2, RyznTheme.TOP, RyznTheme.BOTTOM, 8);
+  }
+
   static boolean window(
       GuiGraphicsExtractor g, int x, int y, int w, int h, int header, float scale) {
     return skijaAvailable() && RyznSkija.window(g, x, y, w, h, header, scale);
   }
 
   static void crown(GuiGraphicsExtractor g, int x, int y, int w, int h) {
-    if (skijaAvailable() && RyznSkija.crown(g, x, y, w, h)) return;
-    g.blit(RenderPipelines.GUI_TEXTURED, CROWN, x, y, 0, 0, w, h, 1401, 1123, 1401, 1123);
+    crown(g, x, y, w, h, -1);
+  }
+
+  static void crown(GuiGraphicsExtractor g, int x, int y, int w, int h, int color) {
+    if (skijaAvailable() && RyznSkija.crown(g, x, y, w, h, color)) return;
+    g.blit(RenderPipelines.GUI_TEXTURED, CROWN, x, y, 0, 0, w, h, 1401, 1123, 1401, 1123, color);
   }
 
   enum Symbol {
@@ -167,6 +176,7 @@ final class RyznMenuStyle {
   enum ButtonKind {
     ACTION,
     LIST_ROW,
+    SWITCH,
     TAB,
     SECTION,
     CARD,
@@ -206,6 +216,10 @@ final class RyznMenuStyle {
     @Override
     protected void extractContents(GuiGraphicsExtractor g, int mouseX, int mouseY, float tick) {
       boolean focused = active && (isHovered() || isFocused());
+      if (kind == ButtonKind.SWITCH) {
+        drawSwitch(g, focused);
+        return;
+      }
       if (kind == ButtonKind.SECTION) {
         drawSection(g, focused);
         return;
@@ -270,6 +284,21 @@ final class RyznMenuStyle {
           kind == ButtonKind.ACTION);
     }
 
+    private void drawSwitch(GuiGraphicsExtractor g, boolean focused) {
+      int x = getX();
+      int y = getY();
+      int w = getWidth();
+      int h = getHeight();
+      if (focused) rounded(g, x, y, w, h, RyznTheme.CARD);
+      String message = getMessage().getString();
+      String label = message.substring(0, message.lastIndexOf("  ·  "));
+      int trackX = x + w - 31;
+      int trackY = y + (h - 12) / 2;
+      rounded(g, trackX, trackY, 25, 12, primary ? RyznTheme.SWITCH_ON : RyznTheme.ICON_TILE);
+      rounded(g, trackX + (primary ? 13 : 2), trackY + 1, 10, 10, RyznTheme.INK);
+      controlText(g, font, label, x + 7, y, w - 42, h, RyznTheme.INK, false, false);
+    }
+
     private void drawMacroCard(GuiGraphicsExtractor g, boolean focused) {
       int x = getX();
       int y = getY();
@@ -303,27 +332,14 @@ final class RyznMenuStyle {
       int y = getY();
       int w = getWidth();
       int h = getHeight();
-      rounded(
-          g,
-          x,
-          y,
-          w,
-          h,
-          primary ? RyznTheme.SELECTION : focused ? RyznTheme.ICON_TILE : RyznTheme.TOP);
+      rounded(g, x, y, w, h, focused ? RyznTheme.ICON_TILE : RyznTheme.TOP);
+      g.fill(x + 8, y + h - 1, x + w - 8, y + h, RyznTheme.EDGE);
       int grip = primary ? RyznTheme.ACCENT : RyznTheme.MUTED;
       for (int i = 0; i < 3; i++) {
         g.fill(x + 8, y + 9 + i * 4, x + 13, y + 10 + i * 4, grip);
       }
       controlText(
-          g, font, getMessage().getString(), x + 20, y, w - 39, h, RyznTheme.INK, true, false);
-      icon(
-          g,
-          font,
-          primary ? Symbol.COLLAPSE : Symbol.EXPAND,
-          x + w - 17,
-          y + (h - 12) / 2,
-          12,
-          primary ? RyznTheme.ACCENT : RyznTheme.MUTED);
+          g, font, getMessage().getString(), x + 20, y, w - 28, h, RyznTheme.INK, true, false);
     }
 
     private void drawSelection(GuiGraphicsExtractor g, boolean focused) {

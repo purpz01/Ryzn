@@ -2,10 +2,11 @@ package ryzn.macro.client.gui;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
@@ -62,25 +63,28 @@ public final class RyznModulesScreen extends Screen {
   private int panelWidth;
   private int panelHeight;
   private static final int HEADER_HEIGHT = 27;
-  private static final int SINGLE_ROW_MIN_WIDTH = 490;
   private static final int MARGIN = 10;
-  private static final int COLUMN_GAP = 8;
-  private static final int WALKING_CONTROLS_TOP = 104;
-  private final EnumMap<Tab, SectionBounds> sections = new EnumMap<>(Tab.class);
-  private final EnumMap<Tab, RyznMenuStyle.MenuButton> headerButtons = new EnumMap<>(Tab.class);
-  private Tab pressedHeader;
+  private final Map<String, SectionBounds> sections = new LinkedHashMap<>();
+  private final List<String> windowOrder = new ArrayList<>();
+  private final Map<String, RyznMenuStyle.MenuButton> headerButtons = new LinkedHashMap<>();
+  private String pressedHeader;
   private int pressX;
   private int pressY;
   private int dragOffsetX;
   private int dragOffsetY;
-  private int rotationScroll;
-  private int walkingScroll;
-  private Tab buildingSection;
-  private final List<Tab> frontOrder = new ArrayList<>();
-  private final EnumMap<Tab, List<AbstractWidget>> panelWidgets = new EnumMap<>(Tab.class);
+  private String buildingWindow;
+  private int firstWindowControl;
+  private final long openedAt = System.nanoTime();
+  private long categoryChangedAt = openedAt;
+  private final Map<String, List<AbstractWidget>> panelWidgets = new LinkedHashMap<>();
   private int scroll;
   private int maxScroll;
-  private final List<RyznMenuStyle.MenuButton> toolbarButtons = new ArrayList<>();
+  private static final int SIDEBAR_WIDTH = 136;
+  private static final int SIDEBAR_MIN_HEIGHT = 245;
+  private static final String SIDEBAR_POSITION = "sidebar";
+  private static final String ROUTE_WINDOW = "Auto Level 7";
+  private boolean draggingSidebar;
+  private final List<RyznMenuStyle.MenuButton> navigationButtons = new ArrayList<>();
   private boolean draggingHeader;
   private String configStatus = "";
   private boolean confirmingReset;
@@ -102,7 +106,6 @@ public final class RyznModulesScreen extends Screen {
 
   private int contentWidth;
   private int contentX;
-  private boolean wheatExpanded;
   private RyznMenuStyle.MenuButton levelToggle;
   private RyznMenuStyle.MenuButton freshStart;
 
@@ -148,76 +151,93 @@ public final class RyznModulesScreen extends Screen {
     layoutSections();
     levelToggle = freshStart = null;
     panelWidgets.clear();
-    if (frontOrder.isEmpty()) frontOrder.addAll(sectionOrder);
-
     headerButtons.clear();
-    for (Tab page : sectionOrder) {
-      useSection(page);
-      SectionBounds bounds = sections.get(page);
-      boolean open = openSections.contains(page);
-      headerButtons.put(
-          page,
+    buildingWindow = null;
+    switch (selectedTab()) {
+      case LEVEL_7 -> {
+        beginWindow(ROUTE_WINDOW);
+        addMacroCatalog();
+      }
+      case ROTATIONS -> addRotationControls();
+      case PATHFINDER -> addWalkingControls();
+      case HUD -> addHudControls();
+      case DEVELOPER -> addDeveloperControls();
+    }
+    finishWindow();
+    for (var entry : sections.entrySet()) {
+      String title = entry.getKey();
+      SectionBounds bounds = entry.getValue();
+      var header =
           addWidget(
               new RyznMenuStyle.MenuButton(
                   font,
-                  page.label,
+                  title,
                   bounds.x(),
                   bounds.y(),
                   bounds.width(),
                   HEADER_HEIGHT,
-                  open,
+                  true,
                   RyznMenuStyle.ButtonKind.SECTION,
-                  () -> toggleSection(page))));
-      if (!open) continue;
-      int first = children().size();
-      switch (page) {
-        case LEVEL_7 -> addMacroCatalog();
-        case ROTATIONS -> addRotationControls();
-        case PATHFINDER -> addWalkingControls();
-        case HUD -> addHudControls();
-        case DEVELOPER -> addDeveloperControls();
-      }
-      panelWidgets.put(
-          page,
-          children().subList(first, children().size()).stream()
-              .filter(AbstractWidget.class::isInstance)
-              .map(AbstractWidget.class::cast)
-              .toList());
+                  () -> {}));
+      header.setTooltip(Tooltip.create(Component.literal("Drag to move")));
+      headerButtons.put(title, header);
     }
 
-    toolbarButtons.clear();
-    int configRight = singleRowToolbar() ? width - 212 : width - MARGIN;
-    int configY = singleRowToolbar() ? 13 : 36;
-    boolean allOpen = openSections.size() == Tab.values().length;
-    toolbarButton(
-        allOpen ? "Collapse all" : "Expand all",
-        width - 208,
-        78,
-        () -> {
-          if (allOpen) {
-            openSections.clear();
-          } else {
-            openSections.addAll(EnumSet.allOf(Tab.class));
-          }
-          saveExpansion();
-          rebuildWidgets();
-        });
-    toolbarButton(
-        "Reset layout",
-        width - 126,
-        86,
-        () -> {
-          var settings = RyznSettings.get();
-          settings.ryznMenu().setSectionOrder(List.of());
-          settings.ryznMenu().resetPositions();
-          frontOrder.clear();
-          settings.save();
-          scroll = 0;
-          rebuildWidgets();
-        });
-    toolbarButton("Save config", configRight - 182, configY, 86, this::saveGlobalConfig);
-    toolbarButton("Reset config", configRight - 92, configY, 92, this::confirmResetGlobalConfig);
-    toolbarButton("×", width - 33, 23, this::onClose);
+    navigationButtons.clear();
+    if (hasSidebar()) {
+      SectionBounds sidebar = sidebarBounds();
+      int sidebarY = sidebar.y() + 42;
+      for (Tab page : sectionOrder) {
+        navigationButtons.add(
+            addWidget(
+                new RyznMenuStyle.MenuButton(
+                    font,
+                    page.label,
+                    sidebar.x() + 7,
+                    sidebarY,
+                    SIDEBAR_WIDTH - 14,
+                    24,
+                    openSections.contains(page),
+                    RyznMenuStyle.ButtonKind.ROUTE,
+                    () -> selectSection(page))));
+        sidebarY += 30;
+      }
+    } else {
+      int tabWidth = (width - 2 * MARGIN - 16) / sectionOrder.size();
+      int x = MARGIN;
+      for (Tab page : sectionOrder) {
+        navigationButtons.add(
+            addWidget(
+                new RyznMenuStyle.MenuButton(
+                    font,
+                    page.label,
+                    x,
+                    40,
+                    tabWidth,
+                    22,
+                    openSections.contains(page),
+                    RyznMenuStyle.ButtonKind.LIST_ROW,
+                    () -> selectSection(page))));
+        x += tabWidth + 4;
+      }
+    }
+    if (hasSidebar()) {
+      SectionBounds sidebar = sidebarBounds();
+      int y = sidebar.y() + sidebar.height() - 31;
+      int x = sidebar.x() + 7;
+      navigationAction("Save", "Save config", x, y, 29, this::saveGlobalConfig);
+      navigationAction("Reset", "Reset config", x + 31, y, 29, this::confirmResetGlobalConfig);
+      navigationAction("Layout", "Reset window positions", x + 62, y, 29, this::resetLayout);
+      navigationAction("Exit", "Close menu", x + 93, y, 29, this::onClose);
+    } else {
+      int w = Math.min(62, (width - 2 * MARGIN - 45) / 4);
+      int x = width - MARGIN - 4 * w - 6;
+      navigationAction("Save", "Save config", x, 10, w, this::saveGlobalConfig);
+      navigationAction("Reset", "Reset config", x + w + 2, 10, w, this::confirmResetGlobalConfig);
+      navigationAction(
+          "Layout", "Reset window positions", x + 2 * (w + 2), 10, w, this::resetLayout);
+      navigationAction("Exit", "Close menu", x + 3 * (w + 2), 10, w, this::onClose);
+    }
     int dialogX = (width - resetDialogWidth()) / 2;
     int buttonY = height / 2 + 20;
     int buttonWidth = (resetDialogWidth() - 32) / 2;
@@ -244,13 +264,21 @@ public final class RyznModulesScreen extends Screen {
     tick();
   }
 
-  private void toolbarButton(String label, int x, int w, Runnable action) {
-    toolbarButton(label, x, singleRowToolbar() ? 13 : 10, w, action);
+  private void navigationAction(
+      String label, String tooltip, int x, int y, int w, Runnable action) {
+    var control = addWidget(new RyznMenuStyle.MenuButton(font, label, x, y, w, 22, false, action));
+    control.setTooltip(Tooltip.create(Component.literal(tooltip)));
+    navigationButtons.add(control);
   }
 
-  private void toolbarButton(String label, int x, int y, int w, Runnable action) {
-    toolbarButtons.add(
-        addWidget(new RyznMenuStyle.MenuButton(font, label, x, y, w, 20, false, action)));
+  private void resetLayout() {
+    var settings = RyznSettings.get();
+    settings.ryznMenu().setSectionOrder(List.of());
+    settings.ryznMenu().resetPositions();
+    windowOrder.clear();
+    settings.save();
+    scroll = 0;
+    rebuildWidgets();
   }
 
   private void saveGlobalConfig() {
@@ -287,8 +315,8 @@ public final class RyznModulesScreen extends Screen {
     RyznBootstrap.failsafeManager().stopAllMacros("config reset");
     if (ConfigManager.global().resetToDefaults()) {
       configStatus = "Defaults restored";
-      frontOrder.clear();
-      scroll = rotationScroll = walkingScroll = 0;
+      scroll = 0;
+      windowOrder.clear();
     } else {
       configStatus = "Could not reset config";
     }
@@ -300,15 +328,17 @@ public final class RyznModulesScreen extends Screen {
     var menu = RyznSettings.get().ryznMenu();
     openSections.clear();
     for (Tab page : Tab.values()) {
-      if (menu.openSections().contains(page.id())) openSections.add(page);
+      if (menu.openSections().contains(page.id())) {
+        openSections.add(page);
+        break;
+      }
     }
-    wheatExpanded = menu.isWheatExpanded();
+    if (openSections.isEmpty()) openSections.add(Tab.LEVEL_7);
   }
 
   private void saveExpansion() {
     var settings = RyznSettings.get();
     settings.ryznMenu().setOpenSections(openSections.stream().map(Tab::id).toList());
-    settings.ryznMenu().setWheatExpanded(wheatExpanded);
     settings.save();
   }
 
@@ -326,66 +356,125 @@ public final class RyznModulesScreen extends Screen {
     sectionOrder = List.copyOf(ordered);
   }
 
-  private boolean singleRowToolbar() {
-    return width >= SINGLE_ROW_MIN_WIDTH;
-  }
-
-  private int toolbarBottom() {
-    return singleRowToolbar() ? 40 : 61;
-  }
-
   private int workspaceTop() {
-    return toolbarBottom() + 4;
+    return hasSidebar() ? MARGIN : 68;
+  }
+
+  private boolean hasSidebar() {
+    return width >= 640 && height >= SIDEBAR_MIN_HEIGHT + 2 * MARGIN;
+  }
+
+  private int workspaceLeft() {
+    return hasSidebar() ? MARGIN + SIDEBAR_WIDTH + 12 : MARGIN;
+  }
+
+  private SectionBounds sidebarBounds() {
+    Position saved = RyznSettings.get().ryznMenu().position(SIDEBAR_POSITION);
+    int x = saved == null ? 0 : Math.round(saved.x() * sidebarTravelX() / 1000f);
+    int y = saved == null ? 0 : Math.round(saved.y() * sidebarTravelY() / 1000f);
+    return new SectionBounds(MARGIN + x, workspaceTop() + y, SIDEBAR_WIDTH, sidebarHeight());
+  }
+
+  private int sidebarHeight() {
+    return Math.min(390, Math.max(SIDEBAR_MIN_HEIGHT, height - workspaceTop() - 2 * MARGIN));
+  }
+
+  private int sidebarTravelX() {
+    return Math.max(0, width - 2 * MARGIN - SIDEBAR_WIDTH);
+  }
+
+  private int sidebarTravelY() {
+    return Math.max(0, height - workspaceTop() - MARGIN - sidebarHeight());
+  }
+
+  private Tab selectedTab() {
+    return openSections.iterator().next();
+  }
+
+  private Map<String, Integer> windowRows() {
+    Map<String, Integer> rows = new LinkedHashMap<>();
+    switch (selectedTab()) {
+      case LEVEL_7 -> rows.put(ROUTE_WINDOW, 0);
+      case ROTATIONS -> {
+        var settings = RyznSettings.get().rotations();
+        rows.put("Engine", 2);
+        if (settings.isAbcEnabled()) {
+          rows.put("Speed & smoothing", 4);
+          rows.put("Precision", 2);
+          rows.put("Planner seed", settings.isRandomSeed() ? 1 : 2);
+        }
+      }
+      case PATHFINDER -> {
+        rows.put("Walking basics", 4);
+        String group = "Walking basics";
+        for (var control : WalkingSettings.Control.values()) {
+          String next = walkingGroup(control);
+          if (next != null) group = next;
+          rows.merge(group, 1, Integer::sum);
+        }
+        rows.merge("Diagnostics", 1, Integer::sum);
+      }
+      case HUD -> rows.put("Display", 2);
+      case DEVELOPER -> {
+        rows.put("Menu input", 1);
+        rows.put("GUI action timing", 3);
+        rows.put("Auto Harp", 2);
+        rows.put("Wheat Breaker", 4);
+      }
+    }
+    return rows;
   }
 
   private void layoutSections() {
-    int usableWidth = width - 2 * MARGIN;
-    int columns = Math.clamp((usableWidth + COLUMN_GAP) / 198, 1, sectionOrder.size());
-    int columnWidth = (usableWidth - (columns - 1) * COLUMN_GAP) / columns;
-    int x = MARGIN;
-    int y = workspaceTop();
-    int rowHeight = 0;
-    for (Tab page : sectionOrder) {
-      int sectionWidth =
-          page == Tab.LEVEL_7 ? Math.min(usableWidth, Math.round(columnWidth * 2.5f)) : columnWidth;
-      if (x > MARGIN && x + sectionWidth > width - MARGIN) {
-        x = MARGIN;
-        y += rowHeight + COLUMN_GAP;
-        rowHeight = 0;
+    sections.clear();
+    int usableWidth = width - MARGIN - workspaceLeft();
+    int columns = usableWidth >= 780 ? 3 : usableWidth >= 490 ? 2 : 1;
+    int w = Math.min(320, (usableWidth - (columns - 1) * 12) / columns);
+    int[] nextY = new int[columns];
+    java.util.Arrays.fill(nextY, workspaceTop());
+    int column = 0;
+    int bottom = workspaceTop();
+    var menu = RyznSettings.get().ryznMenu();
+    for (var entry : windowRows().entrySet()) {
+      String title = entry.getKey();
+      boolean route = title.equals(ROUTE_WINDOW);
+      int windowWidth = route ? Math.min(usableWidth, 650) : w;
+      int windowHeight =
+          route ? routeHeight(windowWidth) : HEADER_HEIGHT + 14 + entry.getValue() * ROTATION_STEP;
+      int x = workspaceLeft() + column * (w + 12);
+      int y = nextY[column];
+      Position saved = menu.position(windowKey(title));
+      if (route && saved == null) saved = menu.position(Tab.LEVEL_7.id());
+      var bounds = new SectionBounds(x, y, windowWidth, windowHeight);
+      if (saved != null) {
+        bounds =
+            new SectionBounds(
+                workspaceLeft() + Math.round(saved.x() * travelX(bounds) / 1000f),
+                workspaceTop() + Math.round(saved.y() * headerTravelY() / 1000f),
+                windowWidth,
+                windowHeight);
       }
-      int sectionHeight = sectionHeight(page, sectionWidth);
-      sections.put(page, new SectionBounds(x, y, sectionWidth, sectionHeight));
-      x += sectionWidth + COLUMN_GAP;
-      rowHeight = Math.max(rowHeight, sectionHeight);
+      sections.put(title, bounds);
+      bottom = Math.max(bottom, bounds.y() + bounds.height());
+      nextY[column] += windowHeight + 12;
+      column = (column + 1) % columns;
     }
-    y += rowHeight + COLUMN_GAP;
-    maxScroll = Math.max(0, y - COLUMN_GAP + MARGIN - height);
+    windowOrder.retainAll(sections.keySet());
+    for (String title : sections.keySet()) {
+      if (!windowOrder.contains(title)) windowOrder.add(title);
+    }
+    maxScroll = Math.max(0, bottom + MARGIN - height);
     scroll = Math.clamp(scroll, 0, maxScroll);
     sections.replaceAll(
-        (page, bounds) -> {
-          Position saved = RyznSettings.get().ryznMenu().position(page.id());
-          if (saved == null) {
-            return new SectionBounds(
-                bounds.x(), bounds.y() - scroll, bounds.width(), bounds.height());
-          }
-          return new SectionBounds(
-              MARGIN + Math.round(saved.x() * travelX(bounds) / 1000f),
-              workspaceTop()
-                  + Math.min(travelY(bounds), Math.round(saved.y() * headerTravelY() / 1000f))
-                  - (page == Tab.LEVEL_7 && bounds.height() > height - workspaceTop() - MARGIN
-                      ? scroll
-                      : 0),
-              bounds.width(),
-              bounds.height());
-        });
+        (title, b) -> new SectionBounds(b.x(), b.y() - scroll, b.width(), b.height()));
+  }
+
+  private String windowKey(String title) {
+    return selectedTab().id() + "/" + title;
   }
 
   private int travelX(SectionBounds bounds) {
-    return Math.max(0, width - 2 * MARGIN - bounds.width());
-  }
-
-  private int travelY(SectionBounds bounds) {
-    return Math.max(0, height - workspaceTop() - MARGIN - bounds.height());
+    return Math.max(0, width - MARGIN - workspaceLeft() - bounds.width());
   }
 
   private int headerTravelY() {
@@ -396,23 +485,12 @@ public final class RyznModulesScreen extends Screen {
     var level = RyznSettings.get().level7();
     int checkpoints = AutoLvl7Macro.routeCheckpointOrder().length;
     int stages = AutoLvl7Macro.resumeStageLabels(level.selectedCheckpoint()).length;
-    int rows = panelWidth >= 560 ? Math.max(checkpoints, stages) : checkpoints + stages + 2;
+    int rows = panelWidth >= 520 ? Math.max(checkpoints, stages) : checkpoints + stages + 2;
     return HEADER_HEIGHT + 47 + rows * 24;
   }
 
-  private int sectionHeight(Tab page, int sectionWidth) {
-    if (!openSections.contains(page)) return HEADER_HEIGHT;
-    return switch (page) {
-      case LEVEL_7 -> routeHeight(sectionWidth);
-      case ROTATIONS, PATHFINDER -> Math.min(278, Math.max(117, height - workspaceTop() - MARGIN));
-      case DEVELOPER -> wheatExpanded ? 335 : 241;
-      case HUD -> 100;
-    };
-  }
-
-  private void useSection(Tab page) {
-    SectionBounds bounds = sections.get(page);
-    buildingSection = page;
+  private void useWindow(String title) {
+    SectionBounds bounds = sections.get(title);
     left = bounds.x();
     top = bounds.y() + HEADER_HEIGHT;
     panelWidth = bounds.width();
@@ -421,17 +499,36 @@ public final class RyznModulesScreen extends Screen {
     contentWidth = panelWidth - 18;
   }
 
-  private void toggleSection(Tab page) {
-    if (!openSections.add(page)) {
-      openSections.remove(page);
-    }
+  private void beginWindow(String title) {
+    finishWindow();
+    buildingWindow = title;
+    firstWindowControl = children().size();
+    useWindow(title);
+  }
+
+  private void finishWindow() {
+    if (buildingWindow == null) return;
+    panelWidgets.put(
+        buildingWindow,
+        children().subList(firstWindowControl, children().size()).stream()
+            .filter(AbstractWidget.class::isInstance)
+            .map(AbstractWidget.class::cast)
+            .toList());
+  }
+
+  private void selectSection(Tab page) {
+    if (openSections.contains(page)) return;
+    openSections.clear();
+    openSections.add(page);
+    categoryChangedAt = System.nanoTime();
+    scroll = 0;
     saveExpansion();
     rebuildWidgets();
   }
 
   private void addMacroCatalog() {
     var level = RyznSettings.get().level7();
-    boolean wide = panelWidth >= 560;
+    boolean wide = panelWidth >= 520;
     int checkpointWidth = wide ? (contentWidth - 16) * 2 / 5 : contentWidth;
     int stageX = wide ? contentX + checkpointWidth + 16 : contentX;
     int stageWidth = contentX + contentWidth - stageX;
@@ -500,37 +597,12 @@ public final class RyznModulesScreen extends Screen {
 
   private void addWheatControls(int y) {
     WheatBreakerMacro wheat = RyznSettings.get().wheat();
-    addRenderableWidget(
-        new RyznMenuStyle.MenuButton(
-            font,
-            "Wheat Breaker",
-            contentX,
-            y,
-            contentWidth,
-            34,
-            wheatExpanded,
-            RyznMenuStyle.ButtonKind.CARD,
-            () -> {
-              wheatExpanded = !wheatExpanded;
-              saveExpansion();
-              rebuildWidgets();
-            }));
-    if (!wheatExpanded) return;
-
     sliderAt(
-        "Sweep speed",
-        -1,
-        y + 39,
-        20,
-        1,
-        5,
-        "",
-        wheat::getSweepLookSpeed,
-        wheat::setSweepLookSpeed);
+        "Sweep speed", -1, y, 20, 1, 5, "", wheat::getSweepLookSpeed, wheat::setSweepLookSpeed);
     sliderAt(
         "ABCurves tracking",
         -1,
-        y + 62,
+        y + 24,
         20,
         WheatBreakerMacro.MIN_SWEEP_TRACKING_PERCENT,
         WheatBreakerMacro.MAX_SWEEP_TRACKING_PERCENT,
@@ -540,7 +612,7 @@ public final class RyznModulesScreen extends Screen {
     sliderAt(
         "Sweep width",
         -1,
-        y + 85,
+        y + 48,
         20,
         60,
         150,
@@ -550,7 +622,7 @@ public final class RyznModulesScreen extends Screen {
     sliderAt(
         "Crop aim pitch offset",
         -1,
-        y + 108,
+        y + 72,
         20,
         -WheatBreakerMacro.MAX_SWEEP_PITCH_OFFSET,
         WheatBreakerMacro.MAX_SWEEP_PITCH_OFFSET,
@@ -575,47 +647,27 @@ public final class RyznModulesScreen extends Screen {
 
   private static final int ROTATION_STEP = 24;
 
-  private int rotationLimit() {
-    var settings = RyznSettings.get().rotations();
-    int rows = settings.isAbcEnabled() ? (settings.isRandomSeed() ? 9 : 10) : 2;
-    return Math.max(
-        0, rows * ROTATION_STEP + HEADER_HEIGHT + 12 - sections.get(Tab.ROTATIONS).height());
+  private int beginSettingsWindow(String title) {
+    beginWindow(title);
+    return 0;
   }
 
   private void addRotationControls() {
-    rotationScroll = Math.clamp(rotationScroll, 0, rotationLimit());
     var settings = RyznSettings.get().rotations();
-    addRenderableWidget(
-        new RyznMenuStyle.MenuButton(
-            font,
-            settings.isAbcEnabled() ? "Rotation mode · ABCurves" : "Rotation mode · Direct",
-            contentX,
-            settingsY(8),
-            contentWidth,
-            settingsRowHeight(),
-            settings.isAbcEnabled(),
-            () -> {
-              settings.setAbcEnabled(!settings.isAbcEnabled());
-              RyznSettings.get().save();
-              rebuildWidgets();
-            }));
-    if (!settings.isAbcEnabled()) {
-      return;
-    }
-    int y = 56;
-    toggle("Random seed per turn session", -1, y, settings::isRandomSeed, settings::setRandomSeed);
-    y += ROTATION_STEP;
-    if (!settings.isRandomSeed()) {
-      slider(
-          "Fixed planner seed",
-          -1,
-          y,
-          RotationSettings.MAX_SEED,
-          "",
-          settings::getAbcSeed,
-          settings::setAbcSeed);
-      y += ROTATION_STEP;
-    }
+    int y = beginSettingsWindow("Engine");
+    button(
+        settings.isAbcEnabled() ? "Rotation mode · ABCurves" : "Rotation mode · Direct",
+        contentX,
+        settingsY(y),
+        contentWidth,
+        false,
+        () -> {
+          settings.setAbcEnabled(!settings.isAbcEnabled());
+          RyznSettings.get().save();
+          rebuildWidgets();
+        });
+    if (!settings.isAbcEnabled()) return;
+    y = beginSettingsWindow("Speed & smoothing");
     slider(
         "Yaw speed cap (0 = off)",
         -1,
@@ -648,36 +700,47 @@ public final class RyznModulesScreen extends Screen {
         " × 0.1°",
         settings::getDeadzoneTenths,
         settings::setDeadzoneTenths);
-    toggle("Limit overshoot", -1, y + 96, settings::isLimitOvershoot, settings::setLimitOvershoot);
+    y = beginSettingsWindow("Precision");
+    toggle("Limit overshoot", -1, y, settings::isLimitOvershoot, settings::setLimitOvershoot);
     toggle(
         "Snap to mouse sensitivity",
         -1,
-        y + 120,
+        y + 24,
         settings::isQuantizeOutput,
         settings::setQuantizeOutput);
-  }
-
-  private int walkingLimit() {
-    int rows = WalkingSettings.Control.values().length + 5;
-    for (var control : WalkingSettings.Control.values()) {
-      if (walkingGroup(control) != null) rows++;
+    y = beginSettingsWindow("Planner seed");
+    toggle("Random seed per turn session", -1, y, settings::isRandomSeed, settings::setRandomSeed);
+    if (!settings.isRandomSeed()) {
+      slider(
+          "Fixed planner seed",
+          -1,
+          y + 24,
+          RotationSettings.MAX_SEED,
+          "",
+          settings::getAbcSeed,
+          settings::setAbcSeed);
     }
-    return Math.max(
-        0, rows * ROTATION_STEP + HEADER_HEIGHT + 12 - sections.get(Tab.PATHFINDER).height());
   }
 
   private void addWalkingControls() {
-    walkingScroll = Math.clamp(walkingScroll, 0, walkingLimit());
     var settings = RyznSettings.get().pathfinder();
     var walking = settings.walking();
-    toggle("Sprint", -1, 8, settings::isSprint, settings::setSprint);
-    toggle("Constant jumping", -1, 32, settings::isConstantJumping, settings::setConstantJumping);
-    toggle("Draw full route", -1, 56, settings::isPathDrawInstant, settings::setPathDrawInstant);
-    toggle("Ryzn Trace", 0, 80, DebugControl::isEnabled, DebugControl::setEnabled);
-    toggle("Log to file only", 1, 80, settings::isPathDebugLogOnly, settings::setPathDebugLogOnly);
-    int y = WALKING_CONTROLS_TOP;
+    String group = "Walking basics";
+    int y = beginSettingsWindow(group);
+    toggle("Sprint", -1, y, settings::isSprint, settings::setSprint);
+    toggle(
+        "Constant jumping", -1, y + 24, settings::isConstantJumping, settings::setConstantJumping);
+    toggle(
+        "Draw full route", -1, y + 48, settings::isPathDrawInstant, settings::setPathDrawInstant);
+    toggle("Ryzn Trace", 0, y + 72, DebugControl::isEnabled, DebugControl::setEnabled);
+    toggle(
+        "Log to file only", 1, y + 72, settings::isPathDebugLogOnly, settings::setPathDebugLogOnly);
     for (var control : WalkingSettings.Control.values()) {
-      if (walkingGroup(control) != null) y += ROTATION_STEP;
+      String next = walkingGroup(control);
+      if (next != null) {
+        group = next;
+        y = beginSettingsWindow(group);
+      }
       if (control.min == 0 && control.max == 1) {
         toggle(
             control.label,
@@ -698,20 +761,17 @@ public final class RyznModulesScreen extends Screen {
       }
       y += ROTATION_STEP;
     }
-    addRenderableWidget(
-        new RyznMenuStyle.MenuButton(
-            font,
-            "Reset walking controls",
-            contentX,
-            settingsY(y),
-            contentWidth,
-            settingsRowHeight(),
-            false,
-            () -> {
-              walking.reset();
-              RyznSettings.get().save();
-              rebuildWidgets();
-            }));
+    button(
+        "Reset walking controls",
+        contentX,
+        settingsY(y),
+        contentWidth,
+        false,
+        () -> {
+          walking.reset();
+          RyznSettings.get().save();
+          rebuildWidgets();
+        });
   }
 
   private static String walkingGroup(WalkingSettings.Control control) {
@@ -728,56 +788,58 @@ public final class RyznModulesScreen extends Screen {
 
   private void addHudControls() {
     var cfg = RyznSettings.get();
-    toggle("Status HUD", 0, 32, cfg.statusHud()::isEnabled, cfg.statusHud()::setEnabled);
+    int y = beginSettingsWindow("Display");
+    toggle("Status HUD", -1, y, cfg.statusHud()::isEnabled, cfg.statusHud()::setEnabled);
     toggle(
-        "Show coordinates", 1, 32, cfg.statusCoords()::isEnabled, cfg.statusCoords()::setEnabled);
+        "Show coordinates",
+        -1,
+        y + 24,
+        cfg.statusCoords()::isEnabled,
+        cfg.statusCoords()::setEnabled);
   }
 
   private void addDeveloperControls() {
     var cfg = RyznSettings.get();
     var settings = cfg.pathfinder();
-    toggle("Move in menu", -1, 8, cfg.ryznMenu()::isMoveInMenu, cfg.ryznMenu()::setMoveInMenu);
+    int y = beginSettingsWindow("Menu input");
+    toggle("Move in menu", -1, y, cfg.ryznMenu()::isMoveInMenu, cfg.ryznMenu()::setMoveInMenu);
+    y = beginSettingsWindow("GUI action timing");
     toggle(
         "Custom GUI delay",
         -1,
-        57,
+        y,
         settings::isGuiActionDelayCustom,
         settings::setGuiActionDelayCustom);
     slider(
         "GUI delay min",
-        0,
-        81,
+        -1,
+        y + 24,
         2000,
         " ms",
         settings::getGuiActionDelayMinMs,
         settings::setGuiActionDelayMinMs);
     slider(
         "GUI delay max",
-        1,
-        81,
+        -1,
+        y + 48,
         2000,
         " ms",
         settings::getGuiActionDelayMaxMs,
         settings::setGuiActionDelayMaxMs);
+    y = beginSettingsWindow("Auto Harp");
     var harp = RyznBootstrap.macroManager().getByClass(AfkAutoHarpMacro.class);
-    slider("Harp retry delay", 0, 130, 10, 100, " ticks", harp::getRetryDelay, harp::setRetryDelay);
-    slider("Harp minimum score", 1, 130, 50, 100, "%", harp::getMinScore, harp::setMinScore);
-    addWheatControls(top + 170);
+    slider("Harp retry delay", -1, y, 10, 100, " ticks", harp::getRetryDelay, harp::setRetryDelay);
+    slider("Harp minimum score", -1, y + 24, 50, 100, "%", harp::getMinScore, harp::setMinScore);
+    y = beginSettingsWindow("Wheat Breaker");
+    addWheatControls(settingsY(y));
   }
 
   private int settingsY(int offset) {
-    if (buildingSection == Tab.PATHFINDER) return top + offset - walkingScroll;
-    if (buildingSection == Tab.ROTATIONS) return top + offset - rotationScroll;
-    return top + offset * settingsHeight() / 220;
-  }
-
-  private int settingsHeight() {
-    if (buildingSection == Tab.DEVELOPER) return 220;
-    return Math.min(220, panelHeight - HEADER_HEIGHT - 8);
+    return top + 7 + offset;
   }
 
   private int settingsRowHeight() {
-    return Math.max(11, Math.min(20, settingsHeight() * 24 / 220 - 2));
+    return 20;
   }
 
   private void toggle(String label, int column, int y, BooleanSupplier get, Consumer<Boolean> set) {
@@ -791,6 +853,7 @@ public final class RyznModulesScreen extends Screen {
             rowWidth,
             settingsRowHeight(),
             get.getAsBoolean(),
+            RyznMenuStyle.ButtonKind.SWITCH,
             () -> {
               set.accept(!get.getAsBoolean());
               RyznSettings.get().save();
@@ -845,18 +908,39 @@ public final class RyznModulesScreen extends Screen {
             int y = getY();
             int w = getWidth();
             int h = getHeight();
-            RyznMenuStyle.rounded(
-                g, x, y, w, h, isFocused() || isHovered() ? RyznTheme.SELECTION : RyznTheme.CARD);
+            if (isFocused() || isHovered()) {
+              RyznMenuStyle.rounded(g, x, y, w, h, RyznTheme.CARD);
+            }
             int filled = (int) Math.round((w - 8) * ((double) (get.getAsInt() - min) / range));
-            g.fill(x + 4, y + h - 3, x + 4 + filled, y + h - 2, RyznTheme.ACCENT);
+            int trackY = y + h - 4;
+            RyznMenuStyle.rounded(g, x + 4, trackY, w - 8, 2, RyznTheme.EDGE);
+            RyznMenuStyle.rounded(g, x + 4, trackY, filled, 2, RyznTheme.ACCENT);
+            int thumbX = Math.clamp(x + 4 + filled - 2, x + 3, x + w - 7);
+            RyznMenuStyle.rounded(g, thumbX, trackY - 1, 4, 4, RyznTheme.INK);
+            String valueLabel = get.getAsInt() + unit;
+            int badgeWidth = Math.min(w / 2, Math.max(21, font.width(valueLabel) + 10));
+            int badgeX = x + w - badgeWidth - 4;
+            int textHeight = Math.max(9, h - 6);
+            RyznMenuStyle.rounded(g, badgeX, y, badgeWidth, textHeight, RyznTheme.CARD);
             RyznMenuStyle.controlText(
                 g,
                 font,
-                label + "  " + get.getAsInt() + unit,
-                x + 4,
+                label,
+                x + 5,
                 y,
-                w - 8,
-                h - 2,
+                w - badgeWidth - 14,
+                textHeight,
+                RyznTheme.INK,
+                false,
+                false);
+            RyznMenuStyle.controlText(
+                g,
+                font,
+                valueLabel,
+                badgeX + 2,
+                y,
+                badgeWidth - 4,
+                textHeight,
                 RyznTheme.INK,
                 false,
                 true);
@@ -906,40 +990,59 @@ public final class RyznModulesScreen extends Screen {
         new RyznMenuStyle.MenuButton(font, label, x, y, w, 20, primary, kind, action));
   }
 
+  private static float easeIn(long start, int durationMs) {
+    float elapsed = Math.clamp((System.nanoTime() - start) / (durationMs * 1_000_000f), 0f, 1f);
+    float remaining = 1f - elapsed;
+    return 1f - remaining * remaining * remaining;
+  }
+
   @Override
   public void extractBackground(GuiGraphicsExtractor g, int x, int y, float tick) {
-    // The workspace draws its chrome and scroll viewport in separate passes.
+    extractBlurredBackground(g);
+    int opacity = Math.round(0x99 * easeIn(openedAt, 180));
+    g.fill(0, 0, width, height, opacity << 24 | 0x06070a);
   }
 
   @Override
   public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float tick) {
     int menuMouseX = confirmingReset ? -1 : mouseX;
     int menuMouseY = confirmingReset ? -1 : mouseY;
-    g.fill(0, 0, width, height, 0x40090a12);
-    g.enableScissor(0, workspaceTop(), width, height);
+    g.enableScissor(workspaceLeft(), workspaceTop(), width, height);
     try {
-      Tab hovered = sectionAt(menuMouseX, menuMouseY);
-      for (Tab page : frontOrder) {
-        SectionBounds bounds = sections.get(page);
+      String hovered = sectionAt(menuMouseX, menuMouseY);
+      for (String title : windowOrder) {
+        SectionBounds bounds = sections.get(title);
         if (bounds.y() + bounds.height() <= workspaceTop() || bounds.y() >= height) continue;
-        useSection(page);
-        int panelMouseX = page == hovered ? mouseX : -1;
-        int panelMouseY = page == hovered ? mouseY : -1;
-        if (openSections.contains(page)) {
+        useWindow(title);
+        int panelMouseX = title.equals(hovered) ? mouseX : -1;
+        int panelMouseY = title.equals(hovered) ? mouseY : -1;
+        if (bounds.height() > HEADER_HEIGHT) {
           drawPanelBackground(g);
           g.enableScissor(
               bounds.x(), top, bounds.x() + bounds.width(), bounds.y() + bounds.height());
           try {
-            for (var control : panelWidgets.getOrDefault(page, List.of())) {
+            for (var control : panelWidgets.getOrDefault(title, List.of())) {
               control.extractRenderState(g, panelMouseX, panelMouseY, tick);
             }
-            drawPanelLabels(g, page);
+            drawPanelLabels(g, title);
 
           } finally {
             g.disableScissor();
           }
         }
-        headerButtons.get(page).extractRenderState(g, panelMouseX, panelMouseY, tick);
+        headerButtons.get(title).extractRenderState(g, panelMouseX, panelMouseY, tick);
+        float reveal = easeIn(categoryChangedAt, 200);
+        if (reveal < 1f) {
+          int accentWidth = Math.round(Math.min(64, bounds.width() - 18) * reveal);
+          int alpha = Math.round(160 * (1f - reveal));
+          int ruleY = bounds.y() + HEADER_HEIGHT - 1;
+          g.fill(
+              bounds.x() + 9,
+              ruleY,
+              bounds.x() + 9 + accentWidth,
+              ruleY + 1,
+              alpha << 24 | (RyznTheme.ACCENT & 0x00ffffff));
+        }
       }
       if (maxScroll > 0) {
         int track = height - workspaceTop() - MARGIN;
@@ -950,32 +1053,43 @@ public final class RyznModulesScreen extends Screen {
     } finally {
       g.disableScissor();
     }
-    RyznMenuStyle.rounded(g, MARGIN, 6, width - 2 * MARGIN, toolbarBottom() - 6, RyznTheme.TOP);
-    RyznMenuStyle.crown(g, MARGIN + 8, singleRowToolbar() ? 9 : 7, 35, 28);
-    RyznMenuStyle.text(
-        g,
-        font,
-        "RYZN",
-        MARGIN + 49,
-        singleRowToolbar() ? 18 : 16,
-        48,
-        RyznTheme.ACCENT,
-        true,
-        false);
-    if (!configStatus.isEmpty() || width >= 680) {
-      boolean inline = singleRowToolbar();
+    if (!hasSidebar()) {
+      RyznMenuStyle.crown(g, MARGIN + 2, 11, 24, 18);
       RyznMenuStyle.text(
           g,
           font,
-          configStatus.isEmpty() ? "Drag section headers to move" : configStatus,
-          MARGIN + (inline ? 92 : 8),
-          inline ? 18 : 42,
-          Math.max(0, width - (inline ? 502 : 216)),
+          configStatus,
+          MARGIN + 34,
+          17,
+          Math.max(0, width - 2 * MARGIN - 292),
           RyznTheme.MUTED,
           false,
           false);
     }
-    for (var control : toolbarButtons) control.extractRenderState(g, menuMouseX, menuMouseY, tick);
+    if (hasSidebar()) {
+      SectionBounds sidebar = sidebarBounds();
+      int x = sidebar.x();
+      int y = sidebar.y();
+      RyznMenuStyle.darkGlass(g, x, y, SIDEBAR_WIDTH, sidebar.height());
+      RyznMenuStyle.crown(g, x + 12, y + 8, 24, 18);
+      RyznMenuStyle.text(
+          g, font, "RYZN", x + 44, y + 13, SIDEBAR_WIDTH - 56, RyznTheme.INK, true, false);
+      g.fill(x + 10, y + 34, x + SIDEBAR_WIDTH - 10, y + 35, RyznTheme.EDGE);
+      int footer = y + sidebar.height() - 40;
+      RyznMenuStyle.text(
+          g,
+          font,
+          configStatus,
+          x + 10,
+          footer - 14,
+          SIDEBAR_WIDTH - 20,
+          RyznTheme.MUTED,
+          false,
+          false);
+      g.fill(x + 10, footer, x + SIDEBAR_WIDTH - 10, footer + 1, RyznTheme.EDGE);
+    }
+    for (var control : navigationButtons)
+      control.extractRenderState(g, menuMouseX, menuMouseY, tick);
     if (confirmingReset) drawResetDialog(g, mouseX, mouseY, tick);
   }
 
@@ -1022,14 +1136,13 @@ public final class RyznModulesScreen extends Screen {
 
   private void drawPanelBackground(GuiGraphicsExtractor g) {
     int panelTop = top - HEADER_HEIGHT;
-    RyznMenuStyle.glass(
-        g, left, panelTop, panelWidth, panelHeight, RyznTheme.TOP, RyznTheme.BOTTOM, 9);
+    RyznMenuStyle.darkGlass(g, left, panelTop, panelWidth, panelHeight);
   }
 
-  private void drawPanelLabels(GuiGraphicsExtractor g, Tab page) {
-    switch (page) {
-      case LEVEL_7 -> {
-        boolean wide = panelWidth >= 560;
+  private void drawPanelLabels(GuiGraphicsExtractor g, String title) {
+    switch (title) {
+      case ROUTE_WINDOW -> {
+        boolean wide = panelWidth >= 520;
         int stageX = wide ? contentX + (contentWidth - 16) * 2 / 5 + 16 : contentX;
         int stageY =
             wide ? top + 26 : top + 26 + (AutoLvl7Macro.routeCheckpointOrder().length + 2) * 24;
@@ -1045,38 +1158,7 @@ public final class RyznModulesScreen extends Screen {
             false,
             false);
       }
-      case DEVELOPER -> {
-        line(g, "GUI action timing", settingsY(40));
-        line(g, "Auto Harp", settingsY(113));
-      }
-      case PATHFINDER -> {
-        int offset = WALKING_CONTROLS_TOP;
-        for (var control : WalkingSettings.Control.values()) {
-          String group = walkingGroup(control);
-          if (group != null) {
-            line(g, group, settingsY(offset));
-            offset += ROTATION_STEP;
-          }
-          offset += ROTATION_STEP;
-        }
-        int limit = walkingLimit();
-        if (limit > 0) {
-          int track = panelHeight - HEADER_HEIGHT - 12;
-          int thumb = Math.max(15, track * track / (track + limit));
-          int y = top + 5 + (track - thumb) * walkingScroll / limit;
-          RyznMenuStyle.rounded(g, left + panelWidth - 5, y, 2, thumb, RyznTheme.MUTED);
-        }
-      }
-      case ROTATIONS -> {
-        line(g, "ABCurves engine · " + AbcRotation.status(), settingsY(32));
-        int limit = rotationLimit();
-        if (limit > 0) {
-          int track = panelHeight - HEADER_HEIGHT - 12;
-          int thumb = Math.max(15, track * track / (track + limit));
-          int y = top + 5 + (track - thumb) * rotationScroll / limit;
-          RyznMenuStyle.rounded(g, left + panelWidth - 5, y, 2, thumb, RyznTheme.MUTED);
-        }
-      }
+      case "Engine" -> line(g, "ABCurves engine · " + AbcRotation.status(), top + 36);
       default -> {}
     }
   }
@@ -1092,23 +1174,40 @@ public final class RyznModulesScreen extends Screen {
         applyReset.mouseClicked(event, doubleClick);
       return true;
     }
-    if (event.y() < workspaceTop()) {
-      for (var control : toolbarButtons) {
+    if (hasSidebar()) {
+      SectionBounds sidebar = sidebarBounds();
+      if (sidebar.contains(event.x(), event.y())) {
+        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && event.y() < sidebar.y() + 34) {
+          draggingSidebar = true;
+          dragOffsetX = (int) event.x() - sidebar.x();
+          dragOffsetY = (int) event.y() - sidebar.y();
+          setFocused(null);
+          setDragging(true);
+          return true;
+        }
+        for (var control : navigationButtons) {
+          if (control.mouseClicked(event, doubleClick)) return true;
+        }
+        return true;
+      }
+    }
+    if (event.y() < workspaceTop() || event.x() < workspaceLeft()) {
+      for (var control : navigationButtons) {
         if (control.mouseClicked(event, doubleClick)) return true;
       }
       return false;
     }
-    Tab page = sectionAt(event.x(), event.y());
-    if (page == null) {
+    String title = sectionAt(event.x(), event.y());
+    if (title == null) {
       setFocused(null);
       return false;
     }
-    SectionBounds bounds = sections.get(page);
-    frontOrder.remove(page);
-    frontOrder.add(page);
+    SectionBounds bounds = sections.get(title);
+    windowOrder.remove(title);
+    windowOrder.add(title);
     if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT
         && bounds.containsHeader(event.x(), event.y())) {
-      pressedHeader = page;
+      pressedHeader = title;
       pressX = (int) event.x();
       pressY = (int) event.y();
       dragOffsetX = pressX - bounds.x();
@@ -1119,7 +1218,7 @@ public final class RyznModulesScreen extends Screen {
       return true;
     }
 
-    for (var control : panelWidgets.getOrDefault(page, List.of())) {
+    for (var control : panelWidgets.getOrDefault(title, List.of())) {
       if (control.mouseClicked(event, doubleClick)) {
         if (children().contains(control)) {
           setFocused(control);
@@ -1132,11 +1231,12 @@ public final class RyznModulesScreen extends Screen {
     return true;
   }
 
-  private Tab sectionAt(double x, double y) {
-    if (y < workspaceTop() || y >= height) return null;
-    for (int i = frontOrder.size() - 1; i >= 0; i--) {
-      Tab page = frontOrder.get(i);
-      if (sections.get(page).contains(x, y)) return page;
+  private String sectionAt(double x, double y) {
+    if (x < workspaceLeft() || y < workspaceTop() || y >= height) return null;
+    if (hasSidebar() && sidebarBounds().contains(x, y)) return null;
+    for (int i = windowOrder.size() - 1; i >= 0; i--) {
+      String title = windowOrder.get(i);
+      if (sections.get(title).contains(x, y)) return title;
     }
     return null;
   }
@@ -1144,22 +1244,36 @@ public final class RyznModulesScreen extends Screen {
   @Override
   public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
     if (confirmingReset) return true;
+    if (draggingSidebar) {
+      int x = Math.clamp((int) event.x() - dragOffsetX - MARGIN, 0, sidebarTravelX());
+      int y = Math.clamp((int) event.y() - dragOffsetY - workspaceTop(), 0, sidebarTravelY());
+      RyznSettings.get()
+          .ryznMenu()
+          .setPosition(
+              SIDEBAR_POSITION,
+              new Position(
+                  sidebarTravelX() == 0 ? 0 : Math.round(x * 1000f / sidebarTravelX()),
+                  sidebarTravelY() == 0 ? 0 : Math.round(y * 1000f / sidebarTravelY())));
+      rebuildWidgets();
+      setDragging(true);
+      return true;
+    }
     if (pressedHeader == null) return super.mouseDragged(event, dx, dy);
     if (!draggingHeader && Math.abs(pressX - event.x()) + Math.abs(pressY - event.y()) < 4)
       return true;
     draggingHeader = true;
     SectionBounds bounds = sections.get(pressedHeader);
     int availableX = travelX(bounds);
-    int availableY = travelY(bounds);
-    int x = Math.clamp((int) event.x() - dragOffsetX - MARGIN, 0, availableX);
-    int y = Math.clamp((int) event.y() - dragOffsetY - workspaceTop(), 0, availableY);
+    int availableY = headerTravelY();
+    int x = Math.clamp((int) event.x() - dragOffsetX - workspaceLeft(), 0, availableX);
+    int y = Math.clamp((int) event.y() - dragOffsetY - workspaceTop() + scroll, 0, availableY);
     var position =
         new Position(
             availableX == 0 ? 0 : Math.round(x * 1000f / availableX),
             headerTravelY() == 0 ? 0 : Math.round(y * 1000f / headerTravelY()));
     var settings = RyznSettings.get().ryznMenu();
-    if (!position.equals(settings.position(pressedHeader.id()))) {
-      settings.setPosition(pressedHeader.id(), position);
+    if (!position.equals(settings.position(windowKey(pressedHeader)))) {
+      settings.setPosition(windowKey(pressedHeader), position);
       rebuildWidgets();
       setDragging(true);
     }
@@ -1169,17 +1283,20 @@ public final class RyznModulesScreen extends Screen {
   @Override
   public boolean mouseReleased(MouseButtonEvent event) {
     if (confirmingReset) return true;
+    if (draggingSidebar && event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+      draggingSidebar = false;
+      setDragging(false);
+      RyznSettings.get().save();
+      return true;
+    }
     if (pressedHeader == null || event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
       return super.mouseReleased(event);
     }
-    Tab page = pressedHeader;
     pressedHeader = null;
     setDragging(false);
     if (draggingHeader) {
       draggingHeader = false;
       RyznSettings.get().save();
-    } else if (sections.get(page).containsHeader(event.x(), event.y())) {
-      toggleSection(page);
     }
     return true;
   }
@@ -1188,27 +1305,6 @@ public final class RyznModulesScreen extends Screen {
   public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
     if (confirmingReset) return true;
     if (scrollY == 0 || y < workspaceTop()) return false;
-    Tab page = sectionAt(x, y);
-
-    if (page == Tab.PATHFINDER && openSections.contains(page)) {
-      int next =
-          Math.clamp(walkingScroll - (int) Math.round(scrollY * ROTATION_STEP), 0, walkingLimit());
-      if (next != walkingScroll) {
-        walkingScroll = next;
-        rebuildWidgets();
-        return true;
-      }
-    }
-    if (page == Tab.ROTATIONS && openSections.contains(page)) {
-      int next =
-          Math.clamp(
-              rotationScroll - (int) Math.round(scrollY * ROTATION_STEP), 0, rotationLimit());
-      if (next != rotationScroll) {
-        rotationScroll = next;
-        rebuildWidgets();
-        return true;
-      }
-    }
     int next = Math.clamp(scroll - (int) Math.round(scrollY * 34), 0, maxScroll);
     if (next == scroll) return false;
     scroll = next;
@@ -1218,7 +1314,7 @@ public final class RyznModulesScreen extends Screen {
 
   @Override
   public void removed() {
-    if (draggingHeader) RyznSettings.get().save();
+    if (draggingHeader || draggingSidebar) RyznSettings.get().save();
     super.removed();
   }
 

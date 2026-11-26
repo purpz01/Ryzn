@@ -9,14 +9,12 @@ import io.github.humbleui.skija.Data;
 import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.FontEdging;
 import io.github.humbleui.skija.FontMgr;
-import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.ImageInfo;
 import io.github.humbleui.skija.Paint;
-import io.github.humbleui.skija.SamplingMode;
 import io.github.humbleui.skija.Shader;
 import io.github.humbleui.skija.Typeface;
+import io.github.humbleui.skija.svg.SVGDOM;
 import io.github.humbleui.types.RRect;
-import io.github.humbleui.types.Rect;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import net.minecraft.client.Minecraft;
@@ -30,18 +28,32 @@ import org.slf4j.LoggerFactory;
 import ryzn.macro.client.RyznResources;
 import ryzn.macro.client.gui.cozy.SettingsUiRenderer;
 
-final class RyznSkija {
+public final class RyznSkija {
   private static final Logger LOGGER = LoggerFactory.getLogger("ryzn-menu");
   private static final int CACHE_LIMIT = 128;
-  private static final LinkedHashMap<Tile, Identifier> textures =
+  private static final LinkedHashMap<Tile, CachedTexture> textures =
       new LinkedHashMap<>(32, 0.75f, true);
   private static boolean checked;
   private static boolean available;
   private static Typeface face;
-  private static Image crown;
+  private static SVGDOM crown;
   private static int sequence;
+  private static long frame;
 
   private RyznSkija() {}
+
+  private record CachedTexture(Identifier id, long lastUsedFrame) {}
+
+  public static void beginFrame(Minecraft client) {
+    frame++;
+    // GUI extraction queues draws. Releasing an entry during extraction can recycle its GPU
+    // texture before the queued draw executes. Also retain the previous frame's full working set.
+    while (textures.size() > CACHE_LIMIT) {
+      var oldest = textures.firstEntry();
+      if (oldest.getValue().lastUsedFrame() >= frame - 1) return;
+      client.getTextureManager().release(textures.pollFirstEntry().getValue().id());
+    }
+  }
 
   private record Tile(
       int width,
@@ -113,8 +125,9 @@ final class RyznSkija {
     return draw(g, x, y, width, height, start, end, radius, null, false, false, null);
   }
 
-  static boolean crown(GuiGraphicsExtractor g, int x, int y, int width, int height) {
-    return draw(g, x, y, width, height, -1, -1, 0, null, false, false, RyznMenuStyle.Symbol.CROWN);
+  static boolean crown(GuiGraphicsExtractor g, int x, int y, int width, int height, int color) {
+    return draw(
+        g, x, y, width, height, color, color, 0, null, false, false, RyznMenuStyle.Symbol.CROWN);
   }
 
   static boolean icon(
@@ -176,13 +189,10 @@ final class RyznSkija {
             symbol,
             headerHeight);
     try {
-      Identifier id = textures.get(tile);
-      if (id == null) {
-        id = createTexture(client, tile);
-        textures.put(tile, id);
-        if (textures.size() > CACHE_LIMIT) {
-          client.getTextureManager().release(textures.pollFirstEntry().getValue());
-        }
+      CachedTexture texture = textures.get(tile);
+      Identifier id = texture == null ? createTexture(client, tile) : texture.id();
+      if (texture == null || texture.lastUsedFrame() != frame) {
+        textures.put(tile, new CachedTexture(id, frame));
       }
       int pixelsWide = width * scale;
       int pixelsHigh = height * scale;
@@ -226,19 +236,14 @@ final class RyznSkija {
               canvas, tile.width(), tile.height(), tile.headerHeight(), tile.radius());
         } else if (tile.symbol() == RyznMenuStyle.Symbol.CROWN) {
           if (crown == null) {
-            try (var stream = RyznResources.open("assets/ryzn/textures/gui/pink_crown.png")) {
-              crown = Image.makeFromEncoded(stream.readAllBytes());
+            try (var stream = RyznResources.open("assets/ryzn/textures/gui/pink_crown.svg");
+                Data svg = Data.makeFromBytes(stream.readAllBytes())) {
+              crown = new SVGDOM(svg);
             } catch (IOException problem) {
               throw new IllegalStateException("Could not load the Ryzn crown", problem);
             }
           }
-          canvas.drawImageRect(
-              crown,
-              Rect.makeWH(crown.getWidth(), crown.getHeight()),
-              Rect.makeWH(tile.width(), tile.height()),
-              SamplingMode.MITCHELL,
-              paint,
-              true);
+          crown.setContainerSize(tile.width(), tile.height()).render(canvas);
         } else if (tile.symbol() != null) {
           float center = tile.width() / 2f;
           switch (tile.symbol()) {

@@ -405,7 +405,9 @@ public final class RevLevel2Macro extends Macro implements MenuToggle {
         : State.PATH_TO_ROSETTA;
   }
 
-  static boolean isWithinMaddoxArrival(double playerX, double playerY, double playerZ) {
+  static boolean isWithinMaddoxArrival(
+      double playerX, double playerY, double playerZ, boolean npcLoaded, boolean canInteract) {
+    if (npcLoaded) return canInteract;
     final double x = playerX - (MADDOX_POSITION.getX() + 0.5);
     final double z = playerZ - (MADDOX_POSITION.getZ() + 0.5);
     return x * x + z * z <= MADDOX_ARRIVAL_DISTANCE_SQUARED

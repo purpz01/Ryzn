@@ -6,6 +6,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import ryzn.macro.client.core.RyznRuntime;
+import ryzn.macro.client.gui.RyznSkija;
 
 @Mixin(Minecraft.class)
 public abstract class RuntimeMinecraftMixin {
@@ -27,6 +28,11 @@ public abstract class RuntimeMinecraftMixin {
       at = @At("HEAD"))
   private void ryzn$clientStopping(CallbackInfo ci) {
     RyznRuntime.stopClient();
+  }
+
+  @Inject(method = "renderFrame", at = @At("HEAD"))
+  private void ryzn$beginMenuFrame(boolean renderLevel, CallbackInfo ci) {
+    RyznSkija.beginFrame((Minecraft) (Object) this);
   }
 
   @Inject(method = "tick", at = @At("HEAD"))
